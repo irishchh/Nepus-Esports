@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nepus Esports</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="utils.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="manifest" href="/manifest.json">
+    <style>
+        #toast-container {
+            position: fixed;
+            top: 1.25rem;
+            right: 1.25rem;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+        .toast {
+            display: flex;
+            align-items: center;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            color: white;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            transform: translateX(100%);
+            opacity: 0;
+            transition: all 0.3s ease-in-out;
+        }
+        .toast.show {
+            transform: translateX(0);
+            opacity: 1;
+        }
+        .toast-success { background-color: #10B981; }
+        .toast-error { background-color: #EF4444; }
+        .toast-info { background-color: #3B82F6; }
+
+        :root {
+            --bg-dark-primary: #111827; /* Dark Blue/Gray */
+            --bg-dark-secondary: #1F2937;
+            --bg-dark-tertiary: #374151;
+            --accent-primary: #8B5CF6; /* Vibrant Purple */
+            --accent-secondary: #EC4899; /* Vibrant Pink */
+            --text-primary: #F9FAFB;
+            --text-secondary: #D1D5DB;
+            --border-color: #4B5563;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(135deg, var(--bg-dark-primary), #0c101a);
+            color: var(--text-primary);
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            text-align: center;
+            transition: all 0.2s ease-in-out;
+            border: 2px solid transparent;
+        }
+
+        .btn-primary {
+            background-color: var(--accent-primary);
+            color: var(--text-primary);
+            box-shadow: 0 4px 15px -5px rgba(139, 92, 246, 0.5);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px -5px rgba(139, 92, 246, 0.6);
+        }
+
+        .btn-outline {
+            border-color: var(--accent-primary);
+            color: var(--accent-primary);
+            background-color: transparent;
+        }
+
+        .btn-outline:hover {
+            background-color: var(--accent-primary);
+            color: var(--text-primary);
+        }
+
+        .card {
+            background-color: var(--bg-dark-secondary);
+            border-radius: 0.75rem;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 10px 25px -10px rgba(0, 0, 0, 0.2);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 30px -10px rgba(0, 0, 0, 0.3);
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border-radius: 0.5rem;
+            background-color: var(--bg-dark-tertiary);
+            border: 2px solid var(--border-color);
+            color: var(--text-primary);
+            transition: border-color 0.2s ease;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+        }
+
+        /* Animations */
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes slideInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .view-transition {
+            animation: fadeIn 0.4s ease-in-out;
+        }
+    </style>
+</head>
+<body class="font-sans">
+
+    <div id="toast-container"></div>
+
+    <div id="app-container" class="max-w-md mx-auto pb-24">
+
+        <!-- Auth View -->
+        <div id="auth-view" class="min-h-screen flex items-center justify-center p-4">
+            <div class="max-w-md w-full">
+                <div class="bg-slate-900/50 backdrop-blur-sm border border-slate-700 p-8 rounded-2xl shadow-lg">
+                    <div class="text-center mb-6">
+                        <img src="assets/logo_login.png" alt="Nepus Esports Login Logo" class="w-64 mx-auto">
+                    </div>
+                    <!-- Auth Forms -->
+                    <div id="auth-forms">
+                        <p class="text-center text-lg text-slate-300 mb-4">Welcome Back! :)</p>
+                        <!-- Login Form -->
+                        <form id="login-form">
+                            <div class="mb-4 relative">
+                                <i class="fas fa-envelope absolute top-3 left-3 text-slate-400"></i>
+                                <input type="email" id="login-email" required class="w-full pl-10 pr-3 py-2 border rounded-md focus:outline-none focus:ring-2 bg-slate-700 border-slate-600 text-white focus:ring-teal-500" placeholder="you@example.com">
+                            </div>
+                            <div class="mb-6 relative">
+                                <i class="fas fa-lock absolute top-3 left-3 text-slate-400"></i>
+                                <input type="password" id="login-password" required class="w-full pl-10 pr-10 py-2 border rounded-md focus:outline-none focus:ring-2 bg-slate-700 border-slate-600 text-white focus:ring-teal-500" placeholder="••••••••">
+                                <button type="button" id="toggle-login-password" class="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                            <div class="text-right mb-4">
+                                <a href="#" id="forgot-password-link" class="text-sm text-teal-400 hover:underline">Forgot Password?</a>
+                            </div>
+                            <button type="submit" id="login-btn" style="background-image: linear-gradient(to right, #f154ff, #49f4d9);" class="w-full text-white font-bold py-2.5 px-4 rounded-md hover:opacity-90 transition-opacity flex justify-center items-center shadow-lg">
+                                <span class="btn-text">Sign In</span>
+                                <i class="fas fa-spinner fa-spin ml-2 hidden"></i>
+                            </button>
+                        </form>
+
+                        <!-- Forgot Password Form (Initially hidden) -->
+                        <form id="forgot-password-form" class="hidden">
+                            <div class="mb-4 relative">
+                                <i class="fas fa-envelope absolute top-3 left-3 text-slate-400"></i>
+                                <input type="email" id="forgot-email" required class="w-full pl-10 pr-3 py-2 border rounded-md focus:outline-none focus:ring-2 bg-slate-700 border-slate-600 text-white focus:ring-teal-500" placeholder="Enter your email">
+                            </div>
+                            <button type="submit" id="forgot-password-btn" class="w-full text-white font-bold py-2.5 px-4 rounded-md bg-gradient-to-r from-purple-500 to-indigo-500 hover:opacity-90 transition-opacity flex justify-center items-center shadow-lg">
+                                <span class="btn-text">Send Reset Link</span>
+                                <i class="fas fa-spinner fa-spin ml-2 hidden"></i>
+                            </button>
+                        </form>
+
+                        <!-- Signup Form (Initially hidden) -->
+                        <form id="signup-form" class="hidden">
+                            <!-- Stage 1: Email and Password -->
+                            <div id="signup-stage-1">
+                                <div class="mb-4 relative">
+                                    <i class="fas fa-envelope absolute top-3 left-3 text-slate-400"></i>
+                                    <input type="email" id="signup-email" required class="w-full pl-10 pr-3 py-2 border rounded-md focus:outline-none focus:ring-2 bg-slate-700 border-slate-600 text-white focus:ring-teal-500" placeholder="you@example.com">
+                                </div>
+                                <div class="mb-4 relative">
+                                    <i class="fas fa-lock absolute top-3 left-3 text-slate-400"></i>
+                                    <input type="password" id="signup-password" required class="w-full pl-10 pr-10 py-2 border rounded-md focus:outline-none focus:ring-2 bg-slate-700 border-slate-600 text-white focus:ring-teal-500" placeholder="Create a password">
+                                    <button type="button" id="toggle-signup-password" class="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+                                <div class="mb-6 relative">
+                                    <i class="fas fa-check-circle absolute top-3 left-3 text-slate-400"></i>
+                                    <input type="password" id="confirm-password" required class="w-full pl-10 pr-10 py-2 border rounded-md focus:outline-none focus:ring-2 bg-slate-700 border-slate-600 text-white focus:ring-teal-500" placeholder="Confirm your password">
+                                    <button type="button" id="toggle-confirm-password" class="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+                                <div class="mb-4 relative">
+                                    <i class="fas fa-user absolute top-3 left-3 text-slate-400"></i>
+                                    <input type="text" id="signup-username" required class="w-full pl-10 pr-3 py-2 border rounded-md focus:outline-none focus:ring-2 bg-slate-700 border-slate-600 text-white focus:ring-teal-500" placeholder="Choose a username">
+                                </div>
+                                <button type="submit" id="signup-btn" class="w-full text-white font-bold py-2.5 px-4 rounded-md bg-gradient-to-r from-green-500 to-teal-500 hover:opacity-90 transition-opacity flex justify-center items-center shadow-lg">
+                                    <span class="btn-text">Create Account</span>
+                                    <i class="fas fa-spinner fa-spin ml-2 hidden"></i>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <p id="auth-error" class="text-red-400 text-sm text-center mt-2"></p>
+                    <p class="text-center text-sm text-slate-400 mt-4">
+                        <span id="toggle-to-signup-text">Don't have an account? <a href="#" id="toggle-to-signup" class="font-medium text-teal-400 hover:underline">Sign Up</a></span>
+                        <span id="toggle-to-login-text" class="hidden">Already have an account? <a href="#" id="toggle-to-login" class="font-medium text-teal-400 hover:underline">Sign In</a></span>
+                        <span id="back-to-login-text" class="hidden">Remember your password? <a href="#" id="back-to-login" class="font-medium text-teal-400 hover:underline">Sign In</a></span>
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main App View -->
+        <div id="main-app-view" class="hidden">
+
+            <!-- App Header -->
+            <header class="bg-slate-900/70 backdrop-blur-sm sticky top-0 z-30 shadow-lg shadow-slate-900/10">
+                <div class="max-w-md mx-auto px-4">
+                    <div class="flex justify-between items-center h-16">
+                        <div class="flex items-center space-x-4">
+                            <a href="#" id="home-logo-btn"><img src="assets/logo.png" alt="Nepus Esports" class="h-16"></a>
+                        </div>
+                        <div class="flex items-center space-x-4">
+                            <div class="relative">
+                                <button id="notification-btn" class="text-slate-300 hover:text-white">
+                                    <i class="fas fa-bell fa-lg"></i>
+                                    <span id="notification-indicator" class="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full hidden"></span>
+                                </button>
+                            </div>
+                                                       <div id="header-wallet-btn" class="flex items-center space-x-2 bg-slate-800/50 border border-slate-700 px-3 py-1.5 rounded-full cursor-pointer">
+                                <i class="fas fa-wallet text-green-400"></i>
+                                <span id="header-wallet-balance" class="text-white font-semibold text-sm">Points 0.00</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Notification Panel -->
+            <div id="notification-panel" class="hidden absolute top-16 right-4 w-80 bg-slate-800 border border-slate-700 rounded-lg shadow-lg z-40">
+                <div class="p-4 border-b border-slate-700">
+                    <h3 class="font-bold text-white">Notifications</h3>
+                </div>
+                <div id="notification-list" class="p-2 max-h-96 overflow-y-auto">
+                    <!-- Notifications will be dynamically inserted here -->
+                </div>
+            </div>
+
+            <!-- Tournament List -->
+            <main id="tournament-list" class="p-4 space-y-4"></main>
+
+            <!-- Leaderboard View -->
+            <div id="leaderboard-view" class="hidden p-4 space-y-4"></div>
+
+            <!-- Edit Profile View -->
+            <div id="edit-profile-view" class="hidden p-4 space-y-6">
+                <!-- Profile Details -->
+                <div class="bg-slate-800/50 border border-slate-700 rounded-xl shadow-lg p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-xl font-bold text-white">Edit Profile</h2>
+                        <button class="back-to-home-btn text-slate-400 hover:text-white"><i class="fas fa-times"></i></button>
+                    </div>
+                    <form id="edit-profile-form">
+                        <div class="mb-4">
+                            <label for="display-name" class="block text-sm font-medium text-slate-300 mb-1">Display Name</label>
+                            <input type="text" id="display-name" required class="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 bg-slate-700 border-slate-600 text-white focus:ring-teal-500" placeholder="Enter your name">
+                        </div>
+                        <div class="mb-4">
+                            <label for="profile-email" class="block text-sm font-medium text-slate-300 mb-1">Email</label>
+                            <input type="email" id="profile-email" readonly class="w-full px-3 py-2 border rounded-md bg-slate-800 border-slate-600 text-slate-400 cursor-not-allowed">
+                        </div>
+                        <div class="mb-4">
+                            <label for="in-game-name" class="block text-sm font-medium text-slate-300 mb-1">In-Game Name</label>
+                            <input type="text" id="in-game-name" class="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 bg-slate-700 border-slate-600 text-white focus:ring-teal-500" placeholder="Your in-game username">
+                        </div>
+                        <div class="mb-4">
+                            <label for="user-upi-id" class="block text-sm font-medium text-slate-300 mb-1">Your Payment ID</label>
+                            <input type="text" id="user-upi-id" class="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 bg-slate-700 border-slate-600 text-white focus:ring-teal-500" placeholder="your-payment@id">
+                        </div>
+                        <button type="submit" class="w-full text-white font-bold py-2.5 px-4 rounded-md bg-gradient-to-r from-blue-500 to-teal-400 hover:opacity-90 transition-opacity">Save Changes</button>
+                    </form>
+                </div>
+
+                <!-- Change Password -->
+                <div class="bg-slate-800/50 border border-slate-700 rounded-xl shadow-lg p-6">
+                    <h2 class="text-xl font-bold text-white mb-4">Change Password</h2>
+                    <form id="change-password-form">
+                        <div class="mb-4">
+                            <label for="current-password" class="block text-sm font-medium text-slate-300 mb-1">Current Password</label>
+                            <input type="password" id="current-password" required class="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 bg-slate-700 border-slate-600 text-white focus:ring-teal-500" placeholder="••••••••">
+                        </div>
+                        <div class="mb-4">
+                            <label for="new-password" class="block text-sm font-medium text-slate-300 mb-1">New Password</label>
+                            <input type="password" id="new-password" required class="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 bg-slate-700 border-slate-600 text-white focus:ring-teal-500" placeholder="••••••••">
+                        </div>
+                        <div class="mb-4">
+                            <label for="confirm-new-password" class="block text-sm font-medium text-slate-300 mb-1">Confirm New Password</label>
+                            <input type="password" id="confirm-new-password" required class="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 bg-slate-700 border-slate-600 text-white focus:ring-teal-500" placeholder="••••••••">
+                        </div>
+                        <button type="submit" class="w-full text-white font-bold py-2.5 px-4 rounded-md bg-gradient-to-r from-orange-500 to-red-500 hover:opacity-90 transition-opacity">Change Password</button>
+                    </form>
+                </div>
+
+                <!-- Logout Button -->
+                <div class="bg-slate-800/50 border border-slate-700 rounded-xl shadow-lg p-4">
+                    <button id="profile-logout-btn" class="w-full text-red-400 font-bold py-2.5 px-4 rounded-md hover:bg-red-500/10 transition-colors">Logout</button>
+                </div>
+            </div>
+
+            <!-- Wallet View -->
+            <div id="wallet-view" class="hidden p-4 space-y-6">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-xl font-bold text-white">My Wallet</h2>
+                    <button class="back-to-home-btn text-slate-400 hover:text-white"><i class="fas fa-times"></i></button>
+                </div>
+
+                <!-- Balance Card -->
+                <div class="bg-gradient-to-br from-teal-500 to-blue-600 rounded-xl shadow-lg p-6 text-white">
+                    <p class="text-sm text-blue-100">Current Balance</p>
+                    <p id="wallet-balance" class="text-3xl font-bold mt-1">Points 0.00</p>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="grid grid-cols-2 gap-4">
+                    <button id="add-money-btn" class="w-full flex items-center justify-center text-white font-bold py-3 px-4 rounded-lg bg-slate-700/50 hover:bg-slate-700 transition-colors"><i class="fas fa-plus-circle mr-2 text-green-400"></i>Add Money</button>
+                    <button id="withdraw-money-btn" class="w-full flex items-center justify-center text-white font-bold py-3 px-4 rounded-lg bg-slate-700/50 hover:bg-slate-700 transition-colors"><i class="fas fa-arrow-circle-down mr-2 text-orange-400"></i>Withdraw</button>
+                </div>
+
+                <!-- Transaction History -->
+                <div>
+                    <h3 class="text-lg font-bold text-white mb-4">Transaction History</h3>
+                    <div id="transaction-history-list" class="space-y-3"></div>
+                </div>
+            </div>
+
+            <!-- Support View -->
+            <div id="support-view" class="hidden p-4">
+                <div class="bg-slate-800/50 border border-slate-700 rounded-xl shadow-lg p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-xl font-bold text-white">Contact Support</h2>
+                        <button class="back-to-home-btn text-slate-400 hover:text-white"><i class="fas fa-times"></i></button>
+                    </div>
+                    <form id="support-form">
+                        <div class="mb-4">
+                            <label for="support-subject" class="block text-sm font-medium text-slate-300 mb-1">Subject</label>
+                            <input type="text" id="support-subject" required class="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 bg-slate-700 border-slate-600 text-white focus:ring-teal-500" placeholder="e.g., Issue with my wallet">
+                        </div>
+                        <div class="mb-6">
+                            <label for="support-message" class="block text-sm font-medium text-slate-300 mb-1">Message</label>
+                            <textarea id="support-message" rows="5" required class="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 bg-slate-700 border-slate-600 text-white focus:ring-teal-500" placeholder="Please describe your issue in detail..."></textarea>
+                        </div>
+                        <button type="submit" class="w-full text-white font-bold py-2.5 px-4 rounded-md bg-gradient-to-r from-blue-500 to-teal-400 hover:opacity-90 transition-opacity">Submit Request</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- My Events View -->
+            <div id="my-events-view" class="hidden p-4 space-y-6">
+                <div class="bg-slate-800/50 border border-slate-700 rounded-lg p-2 flex space-x-2">
+                    <button id="upcoming-tab" class="flex-1 text-center py-2 rounded-md text-sm font-semibold bg-slate-700 text-white">Upcoming/Live</button>
+                    <button id="completed-tab" class="flex-1 text-center py-2 rounded-md text-sm font-semibold text-slate-300">Completed</button>
+                </div>
+                <div id="my-events-list" class="space-y-4"></div>
+            </div>
+
+            <!-- About Us View -->
+            <div id="about-us-view" class="hidden p-4">
+                <div class="bg-slate-800/50 border border-slate-700 rounded-xl shadow-lg p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-xl font-bold text-white">About Us</h2>
+                        <button class="back-to-home-btn text-slate-400 hover:text-white"><i class="fas fa-times"></i></button>
+                    </div>
+                    <div class="text-slate-300 space-y-4">
+                        <p>Welcome to Nepus Esports, your ultimate destination for competitive gaming.</p>
+                        <p>Our mission is to provide a seamless and exciting platform for gamers to compete, improve their skills, and win amazing prizes. We believe in fair play and a vibrant community.</p>
+                        <p>Join us and forge your legacy in the arena!</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Profile View -->
+            <div id="profile-view" class="hidden p-4">
+                <div class="bg-slate-800/50 border border-slate-700 rounded-xl shadow-lg p-2">
+                    <div class="space-y-1 p-2">
+                        <a href="#" id="edit-profile-btn" class="flex items-center p-3 text-base text-slate-300 hover:bg-slate-700 rounded-lg transition-colors"><i class="fas fa-user-edit w-6 text-slate-400 mr-3 text-center"></i>Edit Profile</a>
+                        <a href="#" id="wallet-btn" class="flex items-center p-3 text-base text-slate-300 hover:bg-slate-700 rounded-lg transition-colors"><i class="fas fa-wallet w-6 text-slate-400 mr-3 text-center"></i>Wallet</a>
+                        <a href="#" id="support-btn" class="flex items-center p-3 text-base text-slate-300 hover:bg-slate-700 rounded-lg transition-colors"><i class="fas fa-question-circle w-6 text-slate-400 mr-3 text-center"></i>Support</a>
+                    </div>
+                    <div class="border-t border-slate-700 mx-2 my-1"></div>
+                    <div class="p-2">
+                        <a href="#" id="logout-btn" class="flex items-center p-3 text-base text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"><i class="fas fa-sign-out-alt w-6 text-red-400 mr-3 text-center"></i>Logout</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Fixed Bottom Navigation -->
+            <nav class="fixed bottom-0 left-0 right-0 bg-slate-900/70 backdrop-blur-sm border-t border-slate-700 max-w-md mx-auto">
+                <div class="flex justify-around">
+                    <button id="nav-tournaments" class="flex-1 text-center py-3 text-teal-400 border-t-2 border-teal-400">
+                        <i class="fas fa-trophy"></i>
+                        <span class="block text-xs font-medium">Tournaments</span>
+                    </button>
+                    <button id="nav-my-registrations" class="flex-1 text-center py-3 text-slate-400">
+                        <i class="fas fa-user-check"></i>
+                        <span class="block text-xs font-medium">My Events</span>
+                    </button>
+                    <button id="nav-leaderboard" class="flex-1 text-center py-3 text-slate-400">
+                        <i class="fas fa-trophy"></i>
+                        <span class="block text-xs font-medium">Leaderboard</span>
+                    </button>
+                    <button id="nav-profile" class="flex-1 text-center py-3 text-slate-400">
+                        <i class="fas fa-user"></i>
+                        <span class="block text-xs font-medium">Profile</span>
+                    </button>
+                </div>
+            </nav>
+        </div>
+
+    </div>
+
+    <script src="app.js" defer></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js').then(registration => {
+                    console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                }, err => {
+                    console.log('ServiceWorker registration failed: ', err);
+                });
+            });
+        }
+    </script>
+
+    <!-- Add Money Modal -->
+    <div id="add-money-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 hidden z-50">
+        <div class="bg-slate-800 rounded-xl shadow-xl w-full max-w-sm p-6 border border-slate-700">
+            <h3 class="text-xl font-bold mb-4 text-white">Add Money</h3>
+            <div class="text-center mb-4 bg-white p-2 rounded-lg">
+                <img id="admin-qr-code" src="" alt="Admin UPI QR Code" class="w-40 h-40 mx-auto">
+            </div>
+            <p class="text-slate-300 text-center mb-4">Scan QR or use Payment ID: <span id="admin-upi-id" class="font-semibold text-teal-400"></span></p>
+            <form id="add-money-form">
+                <div class="mb-4">
+                    <label for="add-amount" class="block text-sm font-medium text-slate-300">Amount</label>
+                    <input type="number" id="add-amount" min="1" step="any" required class="mt-1 w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 bg-slate-700 border-slate-600 text-white focus:ring-teal-500" placeholder="0.00">
+                </div>
+                <div class="mb-4">
+                    <label for="transaction-id" class="block text-sm font-medium text-slate-300">Transaction ID</label>
+                    <input type="text" id="transaction-id" required class="mt-1 w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 bg-slate-700 border-slate-600 text-white focus:ring-teal-500" placeholder="Enter the transaction ID">
+                </div>
+                <div class="flex justify-end space-x-2 mt-6">
+                    <button type="button" id="cancel-add-money" class="px-4 py-2 rounded-md text-slate-300 bg-slate-600 hover:bg-slate-700">Cancel</button>
+                    <button type="submit" class="px-4 py-2 rounded-md text-white bg-teal-500 hover:bg-teal-600">Submit Request</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Withdraw Money Modal -->
+    <div id="withdraw-money-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 hidden z-50">
+        <div class="bg-slate-800 rounded-xl shadow-xl w-full max-w-sm p-6 border border-slate-700">
+            <h3 class="text-xl font-bold mb-4 text-white">Withdraw Money</h3>
+            <div class="text-center mb-4">
+                <p class="text-slate-300">Your Payment ID: <span id="user-upi-id-display" class="font-semibold text-teal-400">Not set</span></p>
+            </div>
+            <form id="withdraw-money-form">
+                <div class="mb-4">
+                    <label for="withdraw-amount" class="block text-sm font-medium text-slate-300">Amount</label>
+                    <input type="number" id="withdraw-amount" min="1" step="any" required class="mt-1 w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 bg-slate-700 border-slate-600 text-white focus:ring-orange-500" placeholder="0.00">
+                </div>
+                <div class="mb-4">
+                    <label for="withdraw-upi-id" class="block text-sm font-medium text-slate-300">Payment ID</label>
+                    <input type="text" id="withdraw-upi-id" required class="mt-1 w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 bg-slate-700 border-slate-600 text-white focus:ring-orange-500" placeholder="your-payment@id">
+                </div>
+                <div class="flex justify-end space-x-2 mt-6">
+                    <button type="button" id="cancel-withdraw-money" class="px-4 py-2 rounded-md text-slate-300 bg-slate-600 hover:bg-slate-700">Cancel</button>
+                    <button type="submit" class="px-4 py-2 rounded-md text-white bg-orange-500 hover:bg-orange-600">Request Withdrawal</button>
+                </div>
+            </form>
+        </div>
+    </div>
+<!-- Registration Modal -->
+    <div id="registration-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 hidden z-50">
+        <div class="bg-slate-800 rounded-xl shadow-xl w-full max-w-sm p-6 border border-slate-700">
+            <h3 id="registration-modal-title" class="text-xl font-bold mb-2 text-white">Register for Tournament</h3>
+            <p id="registration-fee" class="text-lg text-yellow-400 mb-4"></p>
+
+            <!-- Progress Indicator -->
+            <div id="registration-progress" class="flex items-center mb-6">
+                <!-- Step 1 -->
+                <div id="reg-step-1-indicator" class="w-8 h-8 rounded-full flex items-center justify-center bg-blue-600 text-white z-10">1</div>
+                <div class="flex-auto border-t-2 border-blue-600 -ml-4 -mr-4"></div>
+                <!-- Step 2 -->
+                <div id="reg-step-2-indicator" class="w-8 h-8 rounded-full flex items-center justify-center bg-slate-700 text-slate-400 z-10">2</div>
+                <div class="flex-auto border-t-2 border-slate-600 -ml-4 -mr-4"></div>
+                <!-- Step 3 -->
+                <div id="reg-step-3-indicator" class="w-8 h-8 rounded-full flex items-center justify-center bg-slate-700 text-slate-400 z-10">3</div>
+            </div>
+
+            <form id="registration-form">
+                <!-- Step 1: Team Name -->
+                <div id="reg-step-1">
+                    <div id="team-name-input-container" class="mb-4">
+                        <label for="team-name" class="block text-sm font-medium text-slate-300">Team Name</label>
+                        <input type="text" id="team-name" class="mt-1 w-full px-3 py-2 border rounded-md bg-slate-700 border-slate-600 text-white" placeholder="Enter your team name">
+                    </div>
+                </div>
+
+                <!-- Step 2: Player Names -->
+                <div id="reg-step-2" class="hidden">
+                    <div id="team-uid-inputs" class="space-y-3 mb-4">
+                        <!-- Dynamic inputs for team UIDs will be inserted here -->
+                    </div>
+                </div>
+
+                <!-- Step 3: Confirmation -->
+                <div id="reg-step-3" class="hidden">
+                    <div id="registration-summary" class="space-y-2 text-sm text-slate-300 bg-slate-700/50 p-4 rounded-md">
+                        <!-- Summary will be injected here -->
+                    </div>
+                </div>
+
+                <!-- Navigation Buttons -->
+                <div class="flex justify-between mt-6">
+                    <button type="button" id="cancel-registration" class="px-4 py-2 rounded-md text-slate-300 bg-slate-600 hover:bg-slate-700">Cancel</button>
+                    <div>
+                        <button type="button" id="reg-prev-btn" class="px-4 py-2 rounded-md text-slate-300 bg-slate-600 hover:bg-slate-700 hidden">Previous</button>
+                        <button type="button" id="reg-next-btn" class="px-4 py-2 rounded-md text-white bg-blue-600 hover:bg-blue-700">Next</button>
+                        <button type="submit" id="reg-submit-btn" class="px-4 py-2 rounded-md text-white bg-green-600 hover:bg-green-700 hidden">Confirm Registration</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+<!-- Tournament Detail Modal -->
+<div id="tournament-detail-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 hidden">
+    <div class="bg-slate-800 rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div class="p-6">
+            <div class="flex justify-between items-start">
+                <h3 id="detail-title" class="text-2xl font-bold text-white"></h3>
+                <button onclick="closeTournamentDetail()" class="text-gray-400 hover:text-white">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            
+            <div class="mt-4 space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <p class="text-sm text-gray-400">Format</p>
+                        <p id="detail-format" class="font-medium"></p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-400">Slots</p>
+                        <p id="detail-slots" class="font-medium"></p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-400">Entry Fee</p>
+                        <p id="detail-fee" class="font-medium"></p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-400">Prize Pool</p>
+                        <p id="detail-prize" class="font-medium text-green-400"></p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-400">Date & Time</p>
+                        <p id="detail-datetime" class="font-medium"></p>
+                    </div>
+                </div>
+
+                <div>
+                    <p class="text-sm text-gray-400">Description</p>
+                    <p id="detail-description" class="mt-1"></p>
+                </div>
+
+                <div id="registered-players" class="mt-6">
+                    <h4 class="font-medium mb-2">Registered Players (0/0)</h4>
+                    <div id="detail-players-list" class="space-y-2 max-h-40 overflow-y-auto">
+                        <!-- Will be populated by JavaScript -->
+                    </div>
+                </div>
+
+                <div class="pt-4 border-t border-slate-700">
+                    <button id="register-btn" class="w-full bg-gradient-to-r from-green-500 to-teal-500 hover:opacity-90 text-white font-bold py-2 px-4 rounded-md">
+                        Register Now
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>
