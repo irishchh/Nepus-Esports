@@ -75,6 +75,8 @@ const userUpiIdDisplay = document.getElementById('user-upi-id-display');
 const loginBtn = document.getElementById('login-btn');
 const signupBtn = document.getElementById('signup-btn');
 const forgotPasswordBtn = document.getElementById('forgot-password-btn');
+const googleSigninBtn = document.getElementById('google-signin-btn');
+const facebookSigninBtn = document.getElementById('facebook-signin-btn');
 
 const toggleLoginPassword = document.getElementById('toggle-login-password');
 const toggleSignupPassword = document.getElementById('toggle-signup-password');
@@ -218,6 +220,43 @@ toggleToLogin.addEventListener('click', (e) => {
     e.preventDefault();
     showLoginForm();
 });
+
+// --- Social Sign-in Logic ---
+googleSigninBtn.addEventListener('click', () => {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    signInWithProvider(provider);
+});
+
+facebookSigninBtn.addEventListener('click', () => {
+    const provider = new firebase.auth.FacebookAuthProvider();
+    signInWithProvider(provider);
+});
+
+function signInWithProvider(provider) {
+    auth.signInWithPopup(provider)
+        .then(result => {
+            const user = result.user;
+            const isNewUser = result.additionalUserInfo.isNewUser;
+
+            if (isNewUser) {
+                // Create a new user profile in the database
+                db.ref('users/' + user.uid).set({
+                    email: user.email,
+                    displayName: user.displayName,
+                    inGameName: '',
+                    upiId: '',
+                    wallet: 0
+                }).then(() => {
+                    showToast('Welcome to Nepus Esports!', 'success');
+                });
+            } else {
+                showToast('Signed in successfully!', 'success');
+            }
+        })
+        .catch(error => {
+            handleAuthError(error);
+        });
+}
 
 // --- Tournament Logic ---
 function renderSkeletonCards() {
@@ -750,6 +789,33 @@ profileLogoutBtn.addEventListener('click', () => {
 const leaderboardView = document.getElementById('leaderboard-view');
 const allViews = [mainContent, editProfileView, walletView, supportView, aboutUsView, myEventsView, profileView, leaderboardView];
 const backToHomeBtns = document.querySelectorAll('.back-to-home-btn');
+
+// --- Password Visibility Toggle ---
+function togglePasswordVisibility(passwordInput, toggleButton) {
+    const icon = toggleButton.querySelector('i');
+    if (passwordInput.type === 'password') {
+        passwordInput.type = 'text';
+        icon.classList.remove('fa-eye');
+        icon.classList.add('fa-eye-slash');
+    } else {
+        passwordInput.type = 'password';
+        icon.classList.remove('fa-eye-slash');
+        icon.classList.add('fa-eye');
+    }
+}
+
+toggleLoginPassword.addEventListener('click', () => {
+    togglePasswordVisibility(document.getElementById('login-password'), toggleLoginPassword);
+});
+
+toggleSignupPassword.addEventListener('click', () => {
+    togglePasswordVisibility(document.getElementById('signup-password'), toggleSignupPassword);
+});
+
+toggleConfirmPassword.addEventListener('click', () => {
+    togglePasswordVisibility(document.getElementById('confirm-password'), toggleConfirmPassword);
+});
+
 function showView(viewToShow) {
     allViews.forEach(v => v.classList.add('hidden'));
     viewToShow.classList.remove('hidden');
