@@ -70,7 +70,6 @@ const addMoneyForm = document.getElementById('add-money-form');
 const withdrawMoneyForm = document.getElementById('withdraw-money-form');
 const cancelAddMoney = document.getElementById('cancel-add-money');
 const cancelWithdrawMoney = document.getElementById('cancel-withdraw-money');
-const userUpiIdDisplay = document.getElementById('user-upi-id-display');
 
 const loginBtn = document.getElementById('login-btn');
 const signupBtn = document.getElementById('signup-btn');
@@ -78,9 +77,6 @@ const forgotPasswordBtn = document.getElementById('forgot-password-btn');
 const googleSigninBtn = document.getElementById('google-signin-btn');
 const facebookSigninBtn = document.getElementById('facebook-signin-btn');
 
-const toggleLoginPassword = document.getElementById('toggle-login-password');
-const toggleSignupPassword = document.getElementById('toggle-signup-password');
-const toggleConfirmPassword = document.getElementById('toggle-confirm-password');
 
 let currentUser = null;
 let currentView = 'all'; // 'all', 'my', or 'history'
@@ -729,7 +725,6 @@ function fetchUserData() {
         if (userData) {
             displayNameInput.value = userData.displayName || '';
             userUpiIdInput.value = userData.upiId || '';
-            userUpiIdDisplay.textContent = userData.upiId || 'Not set';
             inGameNameInput.value = userData.inGameName || '';
             profileEmailInput.value = currentUser.email;
             const balance = `Points ${(userData.wallet || 0).toFixed(2)}`;
@@ -781,40 +776,12 @@ changePasswordForm.addEventListener('submit', (e) => {
     });
 });
 
-profileLogoutBtn.addEventListener('click', () => {
-    auth.signOut();
-});
 
 // --- View Management ---
 const leaderboardView = document.getElementById('leaderboard-view');
 const allViews = [mainContent, editProfileView, walletView, supportView, aboutUsView, myEventsView, profileView, leaderboardView];
 const backToHomeBtns = document.querySelectorAll('.back-to-home-btn');
 
-// --- Password Visibility Toggle ---
-function togglePasswordVisibility(passwordInput, toggleButton) {
-    const icon = toggleButton.querySelector('i');
-    if (passwordInput.type === 'password') {
-        passwordInput.type = 'text';
-        icon.classList.remove('fa-eye');
-        icon.classList.add('fa-eye-slash');
-    } else {
-        passwordInput.type = 'password';
-        icon.classList.remove('fa-eye-slash');
-        icon.classList.add('fa-eye');
-    }
-}
-
-toggleLoginPassword.addEventListener('click', () => {
-    togglePasswordVisibility(document.getElementById('login-password'), toggleLoginPassword);
-});
-
-toggleSignupPassword.addEventListener('click', () => {
-    togglePasswordVisibility(document.getElementById('signup-password'), toggleSignupPassword);
-});
-
-toggleConfirmPassword.addEventListener('click', () => {
-    togglePasswordVisibility(document.getElementById('confirm-password'), toggleConfirmPassword);
-});
 
 function showView(viewToShow) {
     allViews.forEach(v => v.classList.add('hidden'));
@@ -997,7 +964,10 @@ function renderNotifications(notifications) {
         `;
         notificationEl.addEventListener('click', () => {
             if (notification.tournamentId) {
-                // Future enhancement: show tournament details
+                const tournament = allTournaments[notification.tournamentId];
+                if (tournament) {
+                    showTournamentDetail({ ...tournament, id: notification.tournamentId });
+                }
                 notificationPanel.classList.add('hidden');
             }
         });
@@ -1076,8 +1046,9 @@ async function fetchTransactionHistory() {
     });
 
     feesSnap.forEach(snap => {
-        const feeData = snap.val();
-        allTransactions.push({ ...feeData, type: 'Tournament Fee', description: feeData.tournamentName });
+        const txData = snap.val();
+        // The type ('fee' or 'prize') is already in txData
+        allTransactions.push({ ...txData });
     });
 
     allTransactions.sort((a, b) => b.timestamp - a.timestamp);
@@ -1100,16 +1071,23 @@ function renderTransactionHistory(transactions) {
 
         switch (tx.type) {
             case 'Deposit':
+                tx.type = 'Money Added';
                 amountHtml = `<span class="font-semibold text-green-400">+${tx.amount.toFixed(2)}</span>`;
-                descriptionHtml = `Deposit via TXID: ${tx.transactionId}`;
+                descriptionHtml = 'money loaded from wallet';
                 break;
             case 'Withdrawal':
                 amountHtml = `<span class="font-semibold text-red-400">-${tx.amount.toFixed(2)}</span>`;
                 descriptionHtml = `Withdrawal to ${tx.upiId}`;
                 break;
-            case 'Tournament Fee':
+            case 'fee':
+                tx.type = 'Tournament Fee';
                 amountHtml = `<span class="font-semibold text-orange-400">-${tx.amount.toFixed(2)}</span>`;
-                descriptionHtml = `Entry fee for ${tx.description}`;
+                descriptionHtml = `Entry fee for ${tx.tournamentName || 'a tournament'}`;
+                break;
+            case 'prize':
+                tx.type = 'Prize Money';
+                amountHtml = `<span class="font-semibold text-green-400">+${tx.amount.toFixed(2)}</span>`;
+                descriptionHtml = `${tx.rank || ''} in ${tx.tournamentName || 'a tournament'}`;
                 break;
         }
 
@@ -1173,9 +1151,12 @@ supportBtn.addEventListener('click', (e) => {
     showView(supportView);
 });
 
-logoutBtn.addEventListener('click', () => {
-    auth.signOut();
+const aboutUsBtn = document.getElementById('about-us-btn');
+aboutUsBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    showView(aboutUsView);
 });
+
 
 const upcomingTab = document.getElementById('upcoming-tab');
 const completedTab = document.getElementById('completed-tab');
@@ -1204,111 +1185,21 @@ completedTab.addEventListener('click', () => {
     upcomingTab.classList.add('text-slate-300');
 });
 
-function renderMyEvents(filter) {
-    const myEventsList = document.getElementById('my-events-list');
-    myEventsList.innerHTML = '';
 
-    const myRegisteredTournaments = Object.entries(allTournaments)
-        .filter(([id, t]) => t.registrations && t.registrations[currentUser.uid])
-        .filter(([id, t]) => {
-            if (filter === 'upcoming') {
-                return t.status === 'upcoming' || t.status === 'ongoing';
-            } else {
-                return t.status === 'completed';
-            }
-        })
-        .sort((a, b) => new Date(b[1].date) - new Date(a[1].date));
-
-    if (myRegisteredTournaments.length === 0) {
-        let message = filter === 'upcoming' ? 'You have no upcoming or live events.' : 'No completed events found.';
-        myEventsList.innerHTML = `<div class="text-center py-10 px-4"><i class="fas fa-trophy fa-3x text-slate-500"></i><p class="text-slate-400 mt-4">${message}</p></div>`;
-        return;
-    }
-
-    myRegisteredTournaments.forEach(([id, tournament]) => {
-        const card = document.createElement('div');
-        card.className = 'bg-slate-800/50 border border-slate-700 rounded-xl shadow-lg p-4';
-        
-        let statusColor, statusText, statusIcon;
-        switch(tournament.status) {
-            case 'upcoming': statusColor = 'text-blue-400'; statusText = 'Upcoming'; statusIcon = 'fa-calendar-alt'; break;
-            case 'ongoing': statusColor = 'text-green-400'; statusText = 'Live'; statusIcon = 'fa-play-circle'; break;
-            case 'completed': statusColor = 'text-gray-400'; statusText = 'Completed'; statusIcon = 'fa-check-circle'; break;
-            default: statusColor = 'text-gray-500'; statusText = 'Unknown'; statusIcon = 'fa-question-circle';
-        }
-
-        card.innerHTML = `
-            <div class="flex justify-between items-start">
-                <div>
-                    <h3 class="text-lg font-bold text-white">${tournament.name}</h3>
-                    <p class="text-xs text-teal-400 font-semibold mt-1">${tournament.game} - ${tournament.gameType}</p>
-                </div>
-                <span class="text-xs font-semibold px-2.5 py-1 bg-slate-700/50 rounded-full ${statusColor} flex items-center space-x-2">
-                    <i class="fas ${statusIcon}"></i>
-                    <span>${statusText}</span>
-                </span>
-            </div>
-            <div class="mt-4 pt-4 border-t border-slate-700/50">
-                <p class="text-sm text-slate-300">Your Team: <span class="font-semibold text-white">${tournament.registrations[currentUser.uid].teamName || 'N/A'}</span></p>
-                ${tournament.results && tournament.results.firstPlace ? `<p class="text-sm text-slate-300 mt-2">Winner: <span class="font-semibold text-yellow-400">${tournament.results.firstPlace}</span></p>` : ''}
-            </div>
-        `;
-        myEventsList.appendChild(card);
-    });
-}
-
-navHistory.addEventListener('click', () => setActiveView('history', navHistory));
-navProfile.addEventListener('click', () => {
-    setActiveView('profile', navProfile);
-    showView(profileView);
-});
 
 
 
 // --- Profile Dropdown Logic ---
-editProfileBtn.addEventListener('click', (e) => {
-    e.preventDefault();
-    showView(editProfileView);
-    document.querySelector('nav').classList.add('hidden');
-});
 
-walletBtn.addEventListener('click', (e) => {
-    e.preventDefault();
-    showView(walletView);
-    fetchTransactionHistory();
-    document.querySelector('nav').classList.add('hidden');
-});
 
-headerWalletBtn.addEventListener('click', (e) => {
-    e.preventDefault();
-    showView(walletView);
-    fetchTransactionHistory();
-    document.querySelector('nav').classList.add('hidden');
-});
 
-supportBtn.addEventListener('click', (e) => {
-    e.preventDefault();
-    showView(supportView);
-    document.querySelector('nav').classList.add('hidden');
-});
 
 logoutBtn.addEventListener('click', () => {
     auth.signOut();
 });
 
 // --- Support Logic ---
-backToHomeBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
-        showMainContent();
-        setActiveView('all', navTournaments);
-    });
-});
 
-homeLogoBtn.addEventListener('click', (e) => {
-    e.preventDefault();
-    showMainContent();
-    setActiveView('all', navTournaments);
-});
 
 supportForm.addEventListener('submit', (e) => {
     e.preventDefault();
@@ -1320,81 +1211,6 @@ supportForm.addEventListener('submit', (e) => {
 });
 
 // --- Wallet Logic ---
-async function fetchTransactionHistory() {
-    if (!currentUser) return;
-
-    const depositsRef = db.ref('deposits').orderByChild('userId').equalTo(currentUser.uid);
-    const withdrawalsRef = db.ref('withdrawals').orderByChild('userId').equalTo(currentUser.uid);
-
-    const [depositsSnapshot, withdrawalsSnapshot] = await Promise.all([
-        depositsRef.once('value'),
-        withdrawalsRef.once('value')
-    ]);
-
-    const deposits = depositsSnapshot.val() || {};
-    const withdrawals = withdrawalsSnapshot.val() || {};
-
-    const transactions = [];
-    Object.entries(deposits).forEach(([id, t]) => {
-        transactions.push({ ...t, type: 'Deposit', id });
-    });
-
-    Object.entries(withdrawals).forEach(([id, t]) => {
-        transactions.push({ ...t, type: 'Withdrawal', id });
-    });
-
-    transactions.sort((a, b) => b.timestamp - a.timestamp);
-
-    transactionHistoryList.innerHTML = '';
-    if (transactions.length > 0) {
-        transactions.forEach(t => {
-            const item = document.createElement('div');
-            item.className = 'bg-slate-800/50 border border-slate-700 rounded-lg p-3 flex items-center justify-between';
-            const isDeposit = t.type === 'Deposit';
-            let statusColor, statusText;
-            switch (t.status) {
-                case 'approved':
-                case 'completed':
-                    statusColor = 'bg-green-500/20 text-green-300';
-                    statusText = 'Approved';
-                    break;
-                case 'pending':
-                    statusColor = 'bg-yellow-500/20 text-yellow-300';
-                    statusText = 'Pending';
-                    break;
-                case 'rejected':
-                    statusColor = 'bg-red-500/20 text-red-300';
-                    statusText = 'Denied';
-                    break;
-                default:
-                    statusColor = 'bg-slate-600 text-slate-300';
-                    statusText = 'Unknown';
-            }
-
-            const sign = isDeposit ? '+' : '-';
-            const amountColor = isDeposit ? 'text-green-400' : 'text-red-400';
-
-            const iconClass = isDeposit ? 'fa-arrow-down text-green-400' : 'fa-arrow-up text-red-400';
-
-            item.innerHTML = `
-                <div class="flex items-center">
-                    <i class="fas ${iconClass} fa-lg w-6 text-center"></i>
-                    <div class="ml-3 flex-1">
-                        <p class="font-semibold text-white">${t.type}</p>
-                        <p class="text-xs text-slate-400">${new Date(t.timestamp).toLocaleString()}</p>
-                    </div>
-                </div>
-                <div class="text-right">
-                    <p class="font-semibold ${amountColor}">${sign} Points ${t.amount.toFixed(2)}</p>
-                    <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full ${statusColor} mt-1 inline-block">${statusText}</span>
-                </div>
-            `;
-            transactionHistoryList.appendChild(item);
-        });
-    } else {
-        transactionHistoryList.innerHTML = '<p class="text-gray-400">No transactions yet.</p>';
-    }
-}
 addMoneyBtn.addEventListener('click', () => {
     const settingsRef = db.ref('settings');
     settingsRef.once('value', (snapshot) => {
@@ -1409,16 +1225,7 @@ addMoneyBtn.addEventListener('click', () => {
     });
 });
 withdrawMoneyBtn.addEventListener('click', () => {
-    const userRef = db.ref(`users/${currentUser.uid}`);
-    userRef.once('value', (snapshot) => {
-        const userData = snapshot.val();
-        if (userData && userData.upiId) {
-            userUpiIdDisplay.textContent = userData.upiId;
-        } else {
-            userUpiIdDisplay.textContent = 'Not set';
-        }
-        withdrawMoneyModal.classList.remove('hidden');
-    });
+    withdrawMoneyModal.classList.remove('hidden');
 });
 cancelAddMoney.addEventListener('click', () => addMoneyModal.classList.add('hidden'));
 cancelWithdrawMoney.addEventListener('click', () => withdrawMoneyModal.classList.add('hidden'));
@@ -1462,76 +1269,6 @@ withdrawMoneyForm.addEventListener('submit', async (e) => {
         });
 });
 
-addMoneyForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const amount = parseFloat(document.getElementById('add-amount').value);
-    const transactionId = document.getElementById('transaction-id').value.trim();
-
-    if (amount > 0 && transactionId) {
-        const depositRequest = {
-            userId: currentUser.uid,
-            userEmail: currentUser.email,
-            amount: amount,
-            transactionId: transactionId,
-            status: 'pending',
-            timestamp: firebase.database.ServerValue.TIMESTAMP
-        };
-
-        db.ref('deposits').push(depositRequest)
-            .then(() => {
-                alert('Your request to add funds has been submitted for verification.');
-                addMoneyModal.classList.add('hidden');
-                addMoneyForm.reset();
-            })
-            .catch(error => {
-                alert('Error submitting request: ' + error.message);
-            });
-    } else {
-        alert('Please enter a valid amount and transaction ID.');
-    }
-});
-
-withdrawMoneyForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const amount = parseFloat(document.getElementById('withdraw-amount').value);
-    if (amount > 0) {
-            if (userData.wallet < amount) {
-                alert('Insufficient funds.');
-                return;
-            }
-        const userRef = db.ref(`users/${currentUser.uid}`);
-        userRef.once('value', (snapshot) => {
-            const userData = snapshot.val();
-            if (userData.wallet < amount) {
-                alert('Insufficient funds.');
-                return;
-            }
-            if (!userData.upiId) {
-                alert('Please set your UPI ID in your profile before making a withdrawal request.');
-                return;
-            }
-
-            const withdrawalRequest = {
-                amount: amount,
-                userId: currentUser.uid,
-                userEmail: currentUser.email,
-                upiId: userData.upiId,
-                status: 'pending',
-                timestamp: firebase.database.ServerValue.TIMESTAMP
-            };
-
-            db.ref('withdrawals').push(withdrawalRequest)
-                .then(() => {
-                    alert('Your withdrawal request has been submitted.');
-                    withdrawMoneyModal.classList.add('hidden');
-                    withdrawMoneyForm.reset();
-                })
-                .catch(error => {
-                    alert('Error submitting withdrawal request: ' + error.message);
-                });
-        });
-    }
-});
 
 function toggleLoading(button, isLoading) {
     const text = button.querySelector('.btn-text');
@@ -1555,16 +1292,15 @@ function togglePasswordVisibility(input, button) {
     icon.classList.toggle('fa-eye-slash', isPassword);
 }
 
-toggleLoginPassword.addEventListener('click', () => {
-    togglePasswordVisibility(document.getElementById('login-password'), toggleLoginPassword);
+// Consolidated Password Toggle Listeners
+document.getElementById('toggle-login-password')?.addEventListener('click', (e) => {
+    togglePasswordVisibility(document.getElementById('login-password'), e.currentTarget);
 });
-
-toggleSignupPassword.addEventListener('click', () => {
-    togglePasswordVisibility(document.getElementById('signup-password'), toggleSignupPassword);
+document.getElementById('toggle-signup-password')?.addEventListener('click', (e) => {
+    togglePasswordVisibility(document.getElementById('signup-password'), e.currentTarget);
 });
-
-toggleConfirmPassword.addEventListener('click', () => {
-    togglePasswordVisibility(document.getElementById('confirm-password'), toggleConfirmPassword);
+document.getElementById('toggle-confirm-password')?.addEventListener('click', (e) => {
+    togglePasswordVisibility(document.getElementById('confirm-password'), e.currentTarget);
 });
 
 function handleAuthError(error) {
@@ -1647,12 +1383,28 @@ function renderMyEvents(tab) {
                     </div>`;
             }
 
-            if (t.status === 'completed' && t.results && t.results[currentUser.uid]) {
-                const result = t.results[currentUser.uid];
+            if (t.status === 'completed' && t.results) {
+                let winnerText = '';
+                if (t.results.firstPlace) {
+                    const winnerUid = t.results.firstPlace;
+                    const winnerRegistration = t.registrations[winnerUid];
+                    const winnerName = winnerRegistration ? (winnerRegistration.teamName || winnerRegistration.team[0]) : 'Unknown';
+                    winnerText = `<div class="text-sm font-bold text-yellow-400">Winner: ${winnerName}</div>`;
+                }
+
+                let userResultText = '';
+                if (t.results[currentUser.uid]) {
+                    const result = t.results[currentUser.uid];
+                    userResultText = `
+                        <p><strong>Your Rank:</strong> ${result.rank}</p>
+                        <p><strong>Your Prize:</strong> Points ${result.prize.toFixed(2)}</p>
+                    `;
+                }
+
                 detailsHtml = `
                     <div class="mt-2 p-2 bg-slate-700 rounded-md text-sm">
-                        <p><strong>Rank:</strong> ${result.rank}</p>
-                        <p><strong>Prize:</strong> Points ${result.prize.toFixed(2)}</p>
+                        ${winnerText}
+                        ${userResultText}
                     </div>`;
             }
 
@@ -1668,26 +1420,3 @@ function renderMyEvents(tab) {
     });
 }
 
-function updateWallet(amount, type) {
-    const userRef = db.ref(`users/${currentUser.uid}`);
-    userRef.transaction((userData) => {
-        if (userData) {
-            let currentBalance = userData.wallet || 0;
-            if (type === 'withdraw') {
-                if (currentBalance < amount) {
-                    alert('Insufficient funds.');
-                    return; // Abort transaction
-                }
-                userData.wallet = currentBalance - amount;
-            }
-        }
-        return userData;
-    }, (error, committed) => {
-        if (error) {
-            alert('Transaction failed: ' + error.message);
-        } else if (committed) {
-            withdrawMoneyModal.classList.add('hidden');
-            withdrawMoneyForm.reset();
-        }
-    });
-}

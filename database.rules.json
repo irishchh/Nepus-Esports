@@ -1,45 +1,47 @@
 {
   "rules": {
     "users": {
-      ".read": "root.child('admins').child(auth.uid).exists()",
-      ".write": "root.child('admins').child(auth.uid).exists()",
+      ".read": "root.child('admin').child(auth.uid).exists()",
+      ".write": "root.child('admin').child(auth.uid).exists()",
       "$uid": {
-        ".read": "$uid === auth.uid",
-        ".write": "$uid === auth.uid"
+        ".read": "$uid === auth.uid || root.child('admin').child(auth.uid).exists()",
+        ".write": "$uid === auth.uid || root.child('admin').child(auth.uid).exists()"
       }
     },
     "tournaments": {
       ".read": "auth != null",
-      ".write": "root.child('admins').child(auth.uid).exists()",
+      ".write": "root.child('admin').child(auth.uid).exists()",
       "$tournamentId": {
+        ".write": "root.child('admin').child(auth.uid).exists()",
         "registrations": {
           "$uid": {
+            ".read": "$uid === auth.uid || root.child('admin').child(auth.uid).exists()",
             ".write": "$uid === auth.uid"
           }
         }
       }
     },
     "deposits": {
-      ".read": "root.child('admins').child(auth.uid).exists()",
+      ".read": "root.child('admin').child(auth.uid).exists()",
       ".write": "auth != null"
     },
     "withdrawals": {
-      ".read": "root.child('admins').child(auth.uid).exists()",
+      ".read": "root.child('admin').child(auth.uid).exists()",
       ".write": "auth != null"
     },
-    "admins": {
-      ".read": "root.child('admins').child(auth.uid).exists()",
-      ".write": "root.child('admins').child(auth.uid).exists()"
+    "transactions": {
+        ".read": "root.child('admin').child(auth.uid).exists()",
+        "$uid": {
+            ".write": "$uid === auth.uid || root.child('admin').child(auth.uid).exists()"
+        }
+    },
+    "admin": {
+      ".read": "root.child('admin').child(auth.uid).exists()",
+      ".write": "root.child('admin').child(auth.uid).exists()"
     },
     "settings": {
         ".read": true,
-        ".write": "root.child('admins').child(auth.uid).exists()"
-    },
-    "transactions": {
-      "$uid": {
-        ".read": "$uid === auth.uid || root.child('admins').child(auth.uid).exists()",
-        ".write": "$uid === auth.uid"
-      }
+        ".write": "root.child('admin').child(auth.uid).exists()"
     }
   }
 }

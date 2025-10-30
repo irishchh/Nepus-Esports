@@ -1,7 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
 const auth = firebase.auth();
 const db = firebase.database();
-const storage = firebase.storage();
 
 // --- DOM Elements ---
 const authView = document.getElementById('auth-view');
@@ -237,44 +236,6 @@ createTournamentForm.addEventListener('submit', (e) => {
         });
 });
 
-settingsForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const upiId = document.getElementById('upi-id').value;
-    const qrCodeFile = document.getElementById('qr-code-upload').files[0];
-    const existingQrCodeUrl = document.getElementById('qr-code-preview').src;
-
-    if (!upiId) {
-        showToast('Please fill out the Payment ID.', 'error');
-        return;
-    }
-
-    let qrCodeUrl = existingQrCodeUrl;
-
-    if (qrCodeFile) {
-        const storageRef = storage.ref(`qrcodes/${qrCodeFile.name}`);
-        try {
-            const snapshot = await storageRef.put(qrCodeFile);
-            qrCodeUrl = await snapshot.ref.getDownloadURL();
-        } catch (error) {
-            showToast('Error uploading QR code: ' + error.message, 'error');
-            return;
-        }
-    }
-
-    if (!qrCodeUrl) {
-        showToast('Please upload a QR code image.', 'error');
-        return;
-    }
-
-    db.ref('settings').set({
-        upiId: upiId,
-        qrCodeUrl: qrCodeUrl
-    }).then(() => {
-        showToast('Settings saved successfully!', 'success');
-    }).catch(error => {
-        showToast('Error saving settings: ' + error.message, 'error');
-    });
-});
 
 function handleGameTypeChange() {
     const gameSelect = document.getElementById('t-game');
@@ -347,7 +308,7 @@ document.addEventListener('DOMContentLoaded', () => {
 auth.onAuthStateChanged(user => {
     if (user) {
         // Verify if the user is an admin
-        db.ref('admins').child(user.uid).once('value', snapshot => {
+        db.ref('admin').child(user.uid).once('value', snapshot => {
             if (snapshot.exists()) {
                 currentAdmin = user;
                 authView.classList.add('hidden');
@@ -474,39 +435,47 @@ if (settingsForm) {
         e.preventDefault();
         const upiId = document.getElementById('upi-id').value;
         const qrCodeFile = document.getElementById('qr-code-upload').files[0];
-        const existingQrCodeUrl = document.getElementById('qr-code-preview').src;
+        const qrCodePreview = document.getElementById('qr-code-preview');
+        const existingQrCodeUrl = qrCodePreview.src;
 
         if (!upiId) {
-            showToast('Please fill out the Payment ID.', 'error');
+            showToast('Please fill out the eSewa ID.', 'error');
             return;
         }
 
-        let qrCodeUrl = existingQrCodeUrl;
+        const saveSettings = (url) => {
+            db.ref('settings').set({
+                upiId: upiId,
+                qrCodeUrl: url
+            }).then(() => {
+                showToast('Settings saved successfully!', 'success');
+                if (qrCodePreview) {
+                    qrCodePreview.src = url;
+                    qrCodePreview.classList.remove('hidden');
+                }
+            }).catch(error => {
+                showToast('Error saving settings: ' + error.message, 'error');
+            });
+        };
 
         if (qrCodeFile) {
-            const storageRef = storage.ref(`qrcodes/${qrCodeFile.name}`);
-            try {
-                const snapshot = await storageRef.put(qrCodeFile);
-                qrCodeUrl = await snapshot.ref.getDownloadURL();
-            } catch (error) {
-                showToast('Error uploading QR code: ' + error.message, 'error');
-                return;
-            }
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const qrCodeUrl = event.target.result;
+                if (!qrCodeUrl) {
+                    showToast('Could not read QR code file.', 'error');
+                    return;
+                }
+                saveSettings(qrCodeUrl);
+            };
+            reader.onerror = () => {
+                showToast('Error reading file.', 'error');
+            };
+            reader.readAsDataURL(qrCodeFile);
+        } else {
+            // If no new file is uploaded, just save the other settings
+            saveSettings(existingQrCodeUrl);
         }
-
-        if (!qrCodeUrl) {
-            showToast('Please upload a QR code image.', 'error');
-            return;
-        }
-
-        db.ref('settings').set({
-            upiId: upiId,
-            qrCodeUrl: qrCodeUrl
-        }).then(() => {
-            showToast('Settings saved successfully!', 'success');
-        }).catch(error => {
-            showToast('Error saving settings: ' + error.message, 'error');
-        });
     });
 }
 
@@ -607,14 +576,32 @@ async function approveDepositRequest(id) {
             return userData;
         });
         await requestRef.update({ status: 'approved', userId: userId });
+        const notificationRef = db.ref(`notifications/${userId}`).push();
+        await notificationRef.set({
+            message: `Your deposit of ${request.amount} points has been approved.`,
+            timestamp: firebase.database.ServerValue.TIMESTAMP,
+            read: false
+        });
         showToast('Deposit approved!', 'success');
     } catch (error) {
         showToast('Transaction failed: ' + error.message, 'error');
     }
 }
 
-function rejectDepositRequest(id) {
-    db.ref(`deposits/${id}`).update({ status: 'rejected' });
+async function rejectDepositRequest(id) {
+    const requestRef = db.ref(`deposits/${id}`);
+    const requestSnap = await requestRef.once('value');
+    const request = requestSnap.val();
+    if (request && request.userId) {
+        const notificationRef = db.ref(`notifications/${request.userId}`).push();
+        await notificationRef.set({
+            message: `Your deposit of ${request.amount} points has been rejected.`,
+            timestamp: firebase.database.ServerValue.TIMESTAMP,
+            read: false
+        });
+    }
+    await requestRef.update({ status: 'rejected' });
+    showToast('Deposit rejected.', 'info');
 }
 
 // --- Withdrawal Requests ---
@@ -641,7 +628,7 @@ function createWithdrawalRequestCard(id, request) {
         <div class="flex-1">
             <p class="text-sm text-gray-300 font-medium">${request.userEmail}</p>
             <p class="text-lg font-bold text-white">NPR ${request.amount.toFixed(2)}</p>
-            <p class="text-xs text-gray-400 truncate mt-1">UPI: ${request.upiId}</p>
+            <p class="text-xs text-gray-400 truncate mt-1">eSewa ID: ${request.upiId}</p>
         </div>
         <div class="flex flex-col space-y-2">
             <button data-id="${id}" class="confirm-withdrawal-btn flex items-center justify-center w-24 text-xs font-bold py-2 px-3 rounded-md bg-green-500/20 text-green-300 hover:bg-green-500/40 transition-colors">
@@ -668,6 +655,20 @@ withdrawalRequestsList.addEventListener('click', (e) => {
     }
 });
 
+adminTournamentList.addEventListener('click', (e) => {
+    const button = e.target.closest('button');
+    if (!button) return;
+
+    const id = button.dataset.id;
+    if (button.classList.contains('edit-tournament-btn')) {
+        openEditTournamentModal(id);
+    } else if (button.classList.contains('delete-tournament-btn')) {
+        deleteTournament(id);
+    } else if (button.classList.contains('declare-winner-btn')) {
+        openDeclareWinnerModal(id);
+    }
+});
+
 function confirmWithdrawalRequest(id) {
     const requestRef = db.ref(`withdrawals/${id}`);
     requestRef.once('value', (snapshot) => {
@@ -684,6 +685,12 @@ function confirmWithdrawalRequest(id) {
                     showToast('Transaction failed: ' + error.message, 'error');
                 } else if (committed) {
                     requestRef.update({ status: 'completed' });
+                    const notificationRef = db.ref(`notifications/${request.userId}`).push();
+                    notificationRef.set({
+                        message: `Your withdrawal of ${request.amount} points has been completed.`,
+                        timestamp: firebase.database.ServerValue.TIMESTAMP,
+                        read: false
+                    });
                     showToast('Withdrawal confirmed!', 'success');
                 }
             });
@@ -691,9 +698,200 @@ function confirmWithdrawalRequest(id) {
     });
 }
 
-function rejectWithdrawalRequest(id) {
-    db.ref(`withdrawals/${id}`).update({ status: 'rejected' }).then(() => {
-        showToast('Withdrawal request rejected.', 'info');
+async function rejectWithdrawalRequest(id) {
+    const requestRef = db.ref(`withdrawals/${id}`);
+    const requestSnap = await requestRef.once('value');
+    const request = requestSnap.val();
+    if (request && request.userId) {
+        const notificationRef = db.ref(`notifications/${request.userId}`).push();
+        await notificationRef.set({
+            message: `Your withdrawal of ${request.amount} points has been rejected.`,
+            timestamp: firebase.database.ServerValue.TIMESTAMP,
+            read: false
+        });
+    }
+    await requestRef.update({ status: 'rejected' });
+    showToast('Withdrawal request rejected.', 'info');
+}
+
+// --- Declare Winner Logic ---
+const declareWinnerModal = document.getElementById('declare-winner-modal');
+const declareWinnerForm = document.getElementById('declare-winner-form');
+const closeWinnerModalBtn = document.getElementById('close-winner-modal-btn');
+
+async function openDeclareWinnerModal(tournamentId) {
+    const tournamentRef = db.ref(`tournaments/${tournamentId}`);
+    const snapshot = await tournamentRef.once('value');
+    const tournament = snapshot.val();
+
+    if (tournament && tournament.registrations) {
+        document.getElementById('winner-tournament-id').value = tournamentId;
+
+        const firstPlaceSelect = document.getElementById('winner-first-place');
+        const secondPlaceSelect = document.getElementById('winner-second-place');
+        const thirdPlaceSelect = document.getElementById('winner-third-place');
+
+        firstPlaceSelect.innerHTML = '<option value="">Select 1st Place</option>';
+        secondPlaceSelect.innerHTML = '<option value="">Select 2nd Place</option>';
+        thirdPlaceSelect.innerHTML = '<option value="">Select 3rd Place</option>';
+
+        Object.entries(tournament.registrations).forEach(([uid, registration]) => {
+            const teamName = registration.teamName || `Player ${registration.team[0]}`;
+            const option = new Option(teamName, uid);
+            firstPlaceSelect.add(option.cloneNode(true));
+            secondPlaceSelect.add(option.cloneNode(true));
+            thirdPlaceSelect.add(option.cloneNode(true));
+        });
+
+        const secondPlaceContainer = document.getElementById('second-place-winner-container');
+        const thirdPlaceContainer = document.getElementById('third-place-winner-container');
+
+        if (tournament.gameType === 'TDM' || tournament.gameType === 'Clash Squad') {
+            secondPlaceContainer.style.display = 'none';
+            thirdPlaceContainer.style.display = 'none';
+        } else {
+            secondPlaceContainer.style.display = 'block';
+            thirdPlaceContainer.style.display = 'block';
+        }
+
+        declareWinnerModal.classList.remove('hidden');
+    } else {
+        showToast('No registered participants to declare a winner.', 'info');
+    }
+}
+
+if (closeWinnerModalBtn) {
+    closeWinnerModalBtn.addEventListener('click', () => {
+        declareWinnerModal.classList.add('hidden');
+    });
+}
+
+if (declareWinnerForm) {
+    declareWinnerForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const tournamentId = document.getElementById('winner-tournament-id').value;
+        const firstPlaceUid = document.getElementById('winner-first-place').value;
+        const secondPlaceUid = document.getElementById('winner-second-place').value;
+        const thirdPlaceUid = document.getElementById('winner-third-place').value;
+
+        if (!firstPlaceUid) {
+            showToast('Please select a 1st place winner.', 'error');
+            return;
+        }
+
+        const tournamentRef = db.ref(`tournaments/${tournamentId}`);
+        const tournamentSnap = await tournamentRef.once('value');
+        const tournament = tournamentSnap.val();
+
+        const updates = {};
+        updates[`/tournaments/${tournamentId}/status`] = 'completed';
+        updates[`/tournaments/${tournamentId}/results`] = {
+            firstPlace: firstPlaceUid,
+            secondPlace: secondPlaceUid,
+            thirdPlace: thirdPlaceUid
+        };
+
+        const prizePool = tournament.prizePool;
+        const transactions = {};
+
+        // 1st Place
+        if (firstPlaceUid && prizePool.first > 0) {
+            const userRef = db.ref(`users/${firstPlaceUid}`);
+            const userSnap = await userRef.once('value');
+            const user = userSnap.val();
+            updates[`/users/${firstPlaceUid}/wallet`] = (user.wallet || 0) + prizePool.first;
+            const txId = db.ref().child(`transactions/${firstPlaceUid}`).push().key;
+            transactions[txId] = {
+                type: 'prize',
+                amount: prizePool.first,
+                tournamentName: tournament.name,
+                rank: '1st Place',
+                timestamp: firebase.database.ServerValue.TIMESTAMP
+            };
+        }
+
+        // 2nd Place
+        if (secondPlaceUid && prizePool.second > 0) {
+            const userRef = db.ref(`users/${secondPlaceUid}`);
+            const userSnap = await userRef.once('value');
+            const user = userSnap.val();
+            updates[`/users/${secondPlaceUid}/wallet`] = (user.wallet || 0) + prizePool.second;
+            const txId = db.ref().child(`transactions/${secondPlaceUid}`).push().key;
+            transactions[txId] = {
+                type: 'prize',
+                amount: prizePool.second,
+                tournamentName: tournament.name,
+                rank: '2nd Place',
+                timestamp: firebase.database.ServerValue.TIMESTAMP
+            };
+        }
+
+        // 3rd Place
+        if (thirdPlaceUid && prizePool.third > 0) {
+            const userRef = db.ref(`users/${thirdPlaceUid}`);
+            const userSnap = await userRef.once('value');
+            const user = userSnap.val();
+            updates[`/users/${thirdPlaceUid}/wallet`] = (user.wallet || 0) + prizePool.third;
+            const txId = db.ref().child(`transactions/${thirdPlaceUid}`).push().key;
+            transactions[txId] = {
+                type: 'prize',
+                amount: prizePool.third,
+                tournamentName: tournament.name,
+                rank: '3rd Place',
+                timestamp: firebase.database.ServerValue.TIMESTAMP
+            };
+        }
+
+        try {
+            // Use multi-path updates for atomicity
+            await db.ref().update(updates);
+
+            // Now, handle transactions separately for each user
+            const transactionPromises = [];
+            const notificationPromises = [];
+
+            if (firstPlaceUid && prizePool.first > 0) {
+                const txId = db.ref().child(`transactions/${firstPlaceUid}`).push().key;
+                transactionPromises.push(db.ref(`transactions/${firstPlaceUid}/${txId}`).set(transactions[Object.keys(transactions).find(k => transactions[k].rank === '1st Place')]));
+                const notificationRef = db.ref(`notifications/${firstPlaceUid}`).push();
+                notificationPromises.push(notificationRef.set({
+                    message: `You won 1st place in '${tournament.name}' and received ${prizePool.first} points!`,
+                    tournamentId: tournamentId,
+                    timestamp: firebase.database.ServerValue.TIMESTAMP,
+                    read: false
+                }));
+            }
+            if (secondPlaceUid && prizePool.second > 0) {
+                const txId = db.ref().child(`transactions/${secondPlaceUid}`).push().key;
+                transactionPromises.push(db.ref(`transactions/${secondPlaceUid}/${txId}`).set(transactions[Object.keys(transactions).find(k => transactions[k].rank === '2nd Place')]));
+                const notificationRef = db.ref(`notifications/${secondPlaceUid}`).push();
+                notificationPromises.push(notificationRef.set({
+                    message: `You won 2nd place in '${tournament.name}' and received ${prizePool.second} points!`,
+                    tournamentId: tournamentId,
+                    timestamp: firebase.database.ServerValue.TIMESTAMP,
+                    read: false
+                }));
+            }
+            if (thirdPlaceUid && prizePool.third > 0) {
+                const txId = db.ref().child(`transactions/${thirdPlaceUid}`).push().key;
+                transactionPromises.push(db.ref(`transactions/${thirdPlaceUid}/${txId}`).set(transactions[Object.keys(transactions).find(k => transactions[k].rank === '3rd Place')]));
+                const notificationRef = db.ref(`notifications/${thirdPlaceUid}`).push();
+                notificationPromises.push(notificationRef.set({
+                    message: `You won 3rd place in '${tournament.name}' and received ${prizePool.third} points!`,
+                    tournamentId: tournamentId,
+                    timestamp: firebase.database.ServerValue.TIMESTAMP,
+                    read: false
+                }));
+            }
+
+            await Promise.all([...transactionPromises, ...notificationPromises]);
+
+            showToast('Winners declared and prizes distributed!', 'success');
+            declareWinnerModal.classList.add('hidden');
+        } catch (error) {
+            showToast('Error declaring winner: ' + error.message, 'error');
+        }
+
     });
 }
 
@@ -1182,10 +1380,22 @@ function createTournamentCard(id, tournament) {
             </div>
 
             <div class="border-t border-slate-700/50 pt-2 flex justify-between items-center">
-                 <p class="text-sm font-medium text-white">${registrantCount} Registrants</p>
+                <div class="flex items-center space-x-4">
+                    <p class="text-sm font-medium text-white">${registrantCount} Registrants</p>
+                    ${(() => {
+                        if (tournament.status === 'completed' && tournament.results && tournament.results.firstPlace) {
+                            const winnerUid = tournament.results.firstPlace;
+                            const winnerRegistration = tournament.registrations[winnerUid];
+                            const winnerName = winnerRegistration ? (winnerRegistration.teamName || winnerRegistration.team[0]) : 'Unknown';
+                            return `<div class="text-right"><div class="text-xs text-slate-400">Winner</div><div class="text-sm font-bold text-yellow-400">${winnerName}</div></div>`;
+                        } else {
+                            return '';
+                        }
+                    })()}
+                </div>
                 <div class="flex space-x-2">
                     <button data-id="${id}" class="edit-tournament-btn h-7 w-7 flex items-center justify-center rounded-full bg-blue-500/20 text-blue-300 hover:bg-blue-500/40"><i class="fas fa-edit text-xs"></i></button>
-                    <button data-id="${id}" class="view-registrants-btn h-7 w-7 flex items-center justify-center rounded-full bg-purple-500/20 text-purple-300 hover:bg-purple-500/40"><i class="fas fa-users text-xs"></i></button>
+                    ${tournament.status === 'ongoing' ? `<button data-id="${id}" class="declare-winner-btn h-7 w-7 flex items-center justify-center rounded-full bg-green-500/20 text-green-300 hover:bg-green-500/40"><i class="fas fa-trophy text-xs"></i></button>` : ''}
                     <button data-id="${id}" class="delete-tournament-btn h-7 w-7 flex items-center justify-center rounded-full bg-red-500/20 text-red-300 hover:bg-red-500/40"><i class="fas fa-trash text-xs"></i></button>
                 </div>
             </div>
