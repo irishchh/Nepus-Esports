@@ -24,17 +24,21 @@ const navTournaments = document.getElementById('nav-tournaments');
 const navMyRegistrations = document.getElementById('nav-my-registrations');
 const navLeaderboard = document.getElementById('nav-leaderboard');
 const navProfile = document.getElementById('nav-profile');
+const imageSlider = document.getElementById('image-slider');
+const categoryFilters = document.getElementById('category-filters');
 
 // Profile Dropdown Elements
 const editProfileBtn = document.getElementById('edit-profile-btn');
 const walletBtn = document.getElementById('wallet-btn');
 const supportBtn = document.getElementById('support-btn');
+const changePasswordMenuBtn = document.getElementById('change-password-menu-btn');
 
 // Views
 const mainContent = document.getElementById('tournament-list');
 const editProfileView = document.getElementById('edit-profile-view');
 const walletView = document.getElementById('wallet-view');
 const supportView = document.getElementById('support-view');
+const changePasswordView = document.getElementById('change-password-view');
 const aboutUsView = document.getElementById('about-us-view');
 const myEventsView = document.getElementById('my-events-view');
 const profileView = document.getElementById('profile-view');
@@ -98,6 +102,7 @@ loginForm.addEventListener('submit', (e) => {
 });
 
 auth.onAuthStateChanged(user => {
+    setupSlider();
     if (user) {
         currentUser = user;
         authView.classList.add('hidden');
@@ -252,6 +257,107 @@ function signInWithProvider(provider) {
         .catch(error => {
             handleAuthError(error);
         });
+}
+
+// --- Image Slider Logic ---
+const sliderImages = [
+    'assets/Image Slider/image1.jpg',
+    'assets/Image Slider/image2.jpg',
+    'assets/Image Slider/image3.jpg'
+];
+let currentSlide = 0;
+
+function setupSlider() {
+    const sliderContainer = document.getElementById('slider-container');
+    const sliderDots = document.getElementById('slider-dots');
+
+    sliderImages.forEach((src, index) => {
+        const slide = document.createElement('img');
+        slide.src = src;
+        slide.className = 'w-full h-full object-cover flex-shrink-0';
+        sliderContainer.appendChild(slide);
+
+        const dot = document.createElement('button');
+        dot.className = 'w-2 h-2 rounded-full bg-white/50 transition-all';
+        dot.addEventListener('click', () => goToSlide(index));
+        sliderDots.appendChild(dot);
+    });
+
+    updateSlider();
+    setInterval(() => {
+        currentSlide = (currentSlide + 1) % sliderImages.length;
+        updateSlider();
+    }, 5000); // Change slide every 5 seconds
+}
+
+function goToSlide(index) {
+    currentSlide = index;
+    updateSlider();
+}
+
+function updateSlider() {
+    const sliderContainer = document.getElementById('slider-container');
+    const sliderDots = document.getElementById('slider-dots');
+    sliderContainer.style.transform = `translateX(-${currentSlide * 100}%)`;
+
+    Array.from(sliderDots.children).forEach((dot, index) => {
+        dot.classList.toggle('bg-white', index === currentSlide);
+        dot.classList.toggle('bg-white/50', index !== currentSlide);
+    });
+}
+
+// --- Category Filter Logic ---
+document.addEventListener('DOMContentLoaded', () => {
+    const backToHomeBtns = document.querySelectorAll('.back-to-home-btn');
+    backToHomeBtns.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            // Hide all sub-views
+            [editProfileView, walletView, supportView, changePasswordView, aboutUsView].forEach(v => v.classList.add('hidden'));
+
+            // Show the correct main view based on the active nav tab
+            if (currentView === 'profile') {
+                profileView.classList.remove('hidden');
+                mainContent.classList.add('hidden'); // Ensure tournament list is hidden
+            } else if (currentView === 'my') {
+                myEventsView.classList.remove('hidden');
+                mainContent.classList.add('hidden'); // Ensure tournament list is hidden
+            } else {
+                mainContent.classList.remove('hidden');
+            }
+        });
+    });
+
+    const categoryButtons = document.querySelectorAll('.category-btn');
+    categoryButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const game = btn.dataset.game;
+
+            // Update button styles
+            categoryButtons.forEach(b => {
+                b.classList.remove('bg-slate-700', 'text-white');
+                b.classList.add('text-slate-300');
+            });
+            btn.classList.add('bg-slate-700', 'text-white');
+            btn.classList.remove('text-slate-300');
+
+            filterTournamentsByGame(game);
+        });
+    });
+});
+
+function filterTournamentsByGame(game) {
+    if (game === 'all') {
+        renderTournaments(allTournaments);
+    } else {
+        const filteredTournaments = Object.entries(allTournaments).reduce((acc, [id, tournament]) => {
+            if (tournament.game === game) {
+                acc[id] = tournament;
+            }
+            return acc;
+        }, {});
+        renderTournaments(filteredTournaments);
+    }
 }
 
 // --- Tournament Logic ---
@@ -779,13 +885,20 @@ changePasswordForm.addEventListener('submit', (e) => {
 
 // --- View Management ---
 const leaderboardView = document.getElementById('leaderboard-view');
-const allViews = [mainContent, editProfileView, walletView, supportView, aboutUsView, myEventsView, profileView, leaderboardView];
+const allViews = [mainContent, editProfileView, walletView, supportView, aboutUsView, myEventsView, profileView, leaderboardView, changePasswordView];
 const backToHomeBtns = document.querySelectorAll('.back-to-home-btn');
 
 
 function showView(viewToShow) {
     allViews.forEach(v => v.classList.add('hidden'));
     viewToShow.classList.remove('hidden');
+
+    // Apply slide-in animation
+    viewToShow.style.animation = 'slideInFromRight 0.3s ease-out';
+    // Remove animation after it finishes to allow re-triggering
+    setTimeout(() => {
+        viewToShow.style.animation = '';
+    }, 300);
 }
 
 function showMainContent() {
@@ -799,16 +912,23 @@ const navButtons = [navTournaments, navMyRegistrations, navLeaderboard, navProfi
 
 function setActiveView(view, activeBtn) {
     currentView = view;
-    showMainContent();
+
+    // Show/hide slider and filters based on the view
+    const isTournamentView = view === 'all';
+    imageSlider.classList.toggle('hidden', !isTournamentView);
+    categoryFilters.classList.toggle('hidden', !isTournamentView);
 
     if (view === 'leaderboard') {
         showView(leaderboardView);
         fetchLeaderboard();
     } else if (view === 'profile') {
         showView(profileView);
-    } else {
+    } else if (view === 'my') {
+        showView(myEventsView);
+        renderMyEvents('upcoming');
+    } else { // 'all'
         showView(mainContent);
-        fetchTournaments(); // Re-fetch/re-render for all tournament views
+        fetchTournaments();
     }
 
     // Toggle nav button styles
@@ -930,78 +1050,75 @@ withdrawMoneyForm.addEventListener('submit', (e) => {
 // --- Notification Logic ---
 notificationBtn.addEventListener('click', () => {
     notificationPanel.classList.toggle('hidden');
+    // When opening the panel, mark notifications as read
     if (!notificationPanel.classList.contains('hidden')) {
         markNotificationsAsRead();
     }
 });
 
-function fetchNotifications() {
-    if (!currentUser) return;
-    const notificationsRef = db.ref(`notifications/${currentUser.uid}`).orderByChild('timestamp').limitToLast(20);
-    notificationsRef.on('value', snapshot => {
-        const notifications = snapshot.val();
-        renderNotifications(notifications);
-    });
-}
-
-function renderNotifications(notifications) {
-    notificationList.innerHTML = '';
-    if (!notifications) {
-        notificationList.innerHTML = '<p class="text-slate-400 text-sm text-center p-4">No notifications yet.</p>';
-        notificationIndicator.classList.add('hidden');
-        return;
-    }
-
-    const sortedNotifications = Object.entries(notifications).sort((a, b) => b[1].timestamp - a[1].timestamp);
-    let hasUnread = false;
-
-    sortedNotifications.forEach(([id, notification]) => {
-        const notificationEl = document.createElement('div');
-        notificationEl.className = `p-3 border-b border-slate-700/50 text-sm cursor-pointer hover:bg-slate-700 ${!notification.read ? 'bg-slate-700/50' : ''}`;
-        notificationEl.innerHTML = `
-            <p class="${!notification.read ? 'text-white' : 'text-slate-300'}">${notification.message}</p>
-            <p class="text-xs text-slate-400 mt-1">${new Date(notification.timestamp).toLocaleString()}</p>
-        `;
-        notificationEl.addEventListener('click', () => {
-            if (notification.tournamentId) {
-                const tournament = allTournaments[notification.tournamentId];
-                if (tournament) {
-                    showTournamentDetail({ ...tournament, id: notification.tournamentId });
-                }
-                notificationPanel.classList.add('hidden');
-            }
-        });
-        notificationList.appendChild(notificationEl);
-
-        if (!notification.read) {
-            hasUnread = true;
-        }
-    });
-
-    if (hasUnread) {
-        notificationIndicator.classList.remove('hidden');
-    } else {
-        notificationIndicator.classList.add('hidden');
-    }
-}
-
 function markNotificationsAsRead() {
     if (!currentUser) return;
     const notificationsRef = db.ref(`notifications/${currentUser.uid}`);
     notificationsRef.once('value', snapshot => {
-        const notifications = snapshot.val();
-        if (notifications) {
-            const updates = {};
-            Object.keys(notifications).forEach(key => {
-                if (!notifications[key].read) {
-                    updates[`${key}/read`] = true;
-                }
-            });
-            if (Object.keys(updates).length > 0) {
-                notificationsRef.update(updates);
+        const updates = {};
+        snapshot.forEach(childSnapshot => {
+            if (!childSnapshot.val().read) {
+                updates[childSnapshot.key + '/read'] = true;
             }
+        });
+        if (Object.keys(updates).length > 0) {
+            notificationsRef.update(updates);
         }
     });
+}
+
+function fetchNotifications() {
+    if (!currentUser) return;
+    const notificationsRef = db.ref(`notifications/${currentUser.uid}`).orderByChild('timestamp').limitToLast(20);
+
+    notificationsRef.on('value', snapshot => {
+        notificationList.innerHTML = '';
+        const notifications = snapshot.val();
+
+        if (notifications) {
+            const unreadCount = Object.values(notifications).filter(n => !n.read).length;
+            notificationIndicator.classList.toggle('hidden', unreadCount === 0);
+
+            const sortedNotifications = Object.entries(notifications).sort((a, b) => b[1].timestamp - a[1].timestamp);
+
+            sortedNotifications.forEach(([key, notification]) => {
+                const notificationEl = document.createElement('div');
+                notificationEl.className = `p-3 border-b border-slate-700 last:border-b-0 ${!notification.read ? 'bg-slate-700/50' : ''}`;
+                
+                const timeAgo = formatTimeAgo(notification.timestamp);
+
+                notificationEl.innerHTML = `
+                    <p class="text-sm text-slate-200">${notification.message}</p>
+                    <p class="text-xs text-slate-400 mt-1">${timeAgo}</p>
+                `;
+                notificationList.appendChild(notificationEl);
+            });
+        } else {
+            notificationIndicator.classList.add('hidden');
+            notificationList.innerHTML = '<p class="text-slate-400 text-center p-4">No notifications yet.</p>';
+        }
+    });
+}
+
+function formatTimeAgo(timestamp) {
+    const now = new Date();
+    const seconds = Math.floor((now - new Date(timestamp)) / 1000);
+    let interval = seconds / 31536000;
+    if (interval > 1) return Math.floor(interval) + " years ago";
+    interval = seconds / 2592000;
+    if (interval > 1) return Math.floor(interval) + " months ago";
+    interval = seconds / 86400;
+    if (interval > 1) return Math.floor(interval) + " days ago";
+    interval = seconds / 3600;
+    if (interval > 1) return Math.floor(interval) + " hours ago";
+    interval = seconds / 60;
+    if (interval > 1) return Math.floor(interval) + " minutes ago";
+    return Math.floor(seconds) + " seconds ago";
 }
 
 function fetchAdminSettings() {
@@ -1152,6 +1269,11 @@ supportBtn.addEventListener('click', (e) => {
 });
 
 const aboutUsBtn = document.getElementById('about-us-btn');
+changePasswordMenuBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    showView(changePasswordView);
+});
+
 aboutUsBtn.addEventListener('click', (e) => {
     e.preventDefault();
     showView(aboutUsView);
@@ -1163,10 +1285,6 @@ const completedTab = document.getElementById('completed-tab');
 
 navMyRegistrations.addEventListener('click', () => {
     setActiveView('my', navMyRegistrations);
-    showView(myEventsView);
-    renderMyEvents('upcoming');
-    upcomingTab.classList.add('text-teal-400', 'border-teal-400');
-    completedTab.classList.remove('text-teal-400', 'border-teal-400');
 });
 
 upcomingTab.addEventListener('click', () => {

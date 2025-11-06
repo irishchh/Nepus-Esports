@@ -57,7 +57,7 @@
 
         body {
             font-family: 'Poppins', sans-serif;
-            background: linear-gradient(135deg, var(--bg-dark-primary), #0c101a);
+            background: var(--bg-dark-primary);
             color: var(--text-primary);
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
@@ -128,26 +128,35 @@
             to { opacity: 1; }
         }
 
+        @keyframes slideInFromRight {
+            from { opacity: 0; transform: translateX(20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
         @keyframes slideInUp {
             from { opacity: 0; transform: translateY(20px); }
             to { opacity: 1; transform: translateY(0); }
         }
 
-        .view-transition {
+                .view-transition {
             animation: fadeIn 0.4s ease-in-out;
+        }
+
+        #main-app-view nav {
+            background-color: #0f172a !important; /* bg-slate-900 */
         }
     </style>
 </head>
-<body class="font-sans">
+<body class="font-sans pb-20">
 
     <div id="toast-container"></div>
 
-    <div id="app-container" class="max-w-md mx-auto pb-24">
+        <div id="app-container" class="max-w-md mx-auto pb-32">
 
         <!-- Auth View -->
-        <div id="auth-view" class="min-h-screen flex items-center justify-center p-4">
+                <div id="auth-view" class="min-h-screen flex items-center justify-center p-4">
             <div class="max-w-md w-full">
-                <div class="bg-slate-900/50 backdrop-blur-sm border border-slate-700 p-8 rounded-2xl shadow-lg">
+                <div class="bg-slate-900 border border-slate-700 p-8 rounded-2xl shadow-lg">
                     <div class="text-center mb-6">
                         <img src="assets/logo_login.png" alt="Nepus Esports Login Logo" class="w-64 mx-auto">
                     </div>
@@ -251,7 +260,7 @@
         <div id="main-app-view" class="hidden">
 
             <!-- App Header -->
-            <header class="bg-slate-900/70 backdrop-blur-sm sticky top-0 z-30 shadow-lg shadow-slate-900/10">
+                        <header class="bg-slate-900 sticky top-0 z-30 shadow-lg shadow-slate-900/10 border-b border-slate-700">
                 <div class="max-w-md mx-auto px-4">
                     <div class="flex justify-between items-center h-16">
                         <div class="flex items-center space-x-4">
@@ -264,7 +273,7 @@
                                     <span id="notification-indicator" class="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full hidden"></span>
                                 </button>
                             </div>
-                                                       <div id="header-wallet-btn" class="flex items-center space-x-2 bg-slate-800/50 border border-slate-700 px-3 py-1.5 rounded-full cursor-pointer">
+                                                                                      <div id="header-wallet-btn" class="flex items-center space-x-2 bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-full cursor-pointer">
                                 <i class="fas fa-wallet text-green-400"></i>
                                 <span id="header-wallet-balance" class="text-white font-semibold text-sm">Points 0.00</span>
                             </div>
@@ -283,6 +292,26 @@
                 </div>
             </div>
 
+            <!-- Image Slider -->
+            <div class="relative w-full my-4 px-4">
+                <div id="image-slider" class="relative w-full overflow-hidden rounded-lg shadow-lg" style="height: 120px;">
+                <div id="slider-container" class="flex transition-transform duration-500 ease-in-out">
+                    <!-- Slider images will be injected by JS -->
+                </div>
+                <div id="slider-dots" class="absolute bottom-2 left-1/2 -translate-x-1/2 flex space-x-2">
+                    <!-- Dots will be injected by JS -->
+                </div>
+            </div>
+
+            <!-- Category Filters -->
+            <div id="category-filters" class="px-4 mt-4">
+                <div class="flex space-x-2 bg-slate-800/50 p-1 rounded-full">
+                    <button class="category-btn flex-1 text-center py-2 rounded-full text-sm font-semibold bg-slate-700 text-white" data-game="all">All</button>
+                    <button class="category-btn flex-1 text-center py-2 rounded-full text-sm font-semibold text-slate-300" data-game="Free Fire">Free Fire</button>
+                    <button class="category-btn flex-1 text-center py-2 rounded-full text-sm font-semibold text-slate-300" data-game="PUBG">PUBG</button>
+                </div>
+            </div>
+
             <!-- Tournament List -->
             <main id="tournament-list" class="p-4 space-y-4"></main>
 
@@ -290,9 +319,9 @@
             <div id="leaderboard-view" class="hidden p-4 space-y-4"></div>
 
             <!-- Edit Profile View -->
-            <div id="edit-profile-view" class="hidden p-4 space-y-6">
+                        <div id="edit-profile-view" class="hidden p-4 space-y-6">
                 <!-- Profile Details -->
-                <div class="bg-slate-800/50 border border-slate-700 rounded-xl shadow-lg p-6">
+                <div class="bg-slate-800 border border-slate-700 rounded-xl shadow-lg p-6">
                     <div class="flex items-center justify-between mb-4">
                         <h2 class="text-xl font-bold text-white">Edit Profile</h2>
                         <button class="back-to-home-btn text-slate-400 hover:text-white"><i class="fas fa-times"></i></button>
@@ -318,25 +347,6 @@
                     </form>
                 </div>
 
-                <!-- Change Password -->
-                <div class="bg-slate-800/50 border border-slate-700 rounded-xl shadow-lg p-6">
-                    <h2 class="text-xl font-bold text-white mb-4">Change Password</h2>
-                    <form id="change-password-form">
-                        <div class="mb-4">
-                            <label for="current-password" class="block text-sm font-medium text-slate-300 mb-1">Current Password</label>
-                            <input type="password" id="current-password" required class="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 bg-slate-700 border-slate-600 text-white focus:ring-teal-500" placeholder="••••••••">
-                        </div>
-                        <div class="mb-4">
-                            <label for="new-password" class="block text-sm font-medium text-slate-300 mb-1">New Password</label>
-                            <input type="password" id="new-password" required class="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 bg-slate-700 border-slate-600 text-white focus:ring-teal-500" placeholder="••••••••">
-                        </div>
-                        <div class="mb-4">
-                            <label for="confirm-new-password" class="block text-sm font-medium text-slate-300 mb-1">Confirm New Password</label>
-                            <input type="password" id="confirm-new-password" required class="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 bg-slate-700 border-slate-600 text-white focus:ring-teal-500" placeholder="••••••••">
-                        </div>
-                        <button type="submit" class="w-full text-white font-bold py-2.5 px-4 rounded-md bg-gradient-to-r from-orange-500 to-red-500 hover:opacity-90 transition-opacity">Change Password</button>
-                    </form>
-                </div>
 
             </div>
 
@@ -354,9 +364,9 @@
                 </div>
 
                 <!-- Action Buttons -->
-                <div class="grid grid-cols-2 gap-4">
-                    <button id="add-money-btn" class="w-full flex items-center justify-center text-white font-bold py-3 px-4 rounded-lg bg-slate-700/50 hover:bg-slate-700 transition-colors"><i class="fas fa-plus-circle mr-2 text-green-400"></i>Add Money</button>
-                    <button id="withdraw-money-btn" class="w-full flex items-center justify-center text-white font-bold py-3 px-4 rounded-lg bg-slate-700/50 hover:bg-slate-700 transition-colors"><i class="fas fa-arrow-circle-down mr-2 text-orange-400"></i>Withdraw</button>
+                                <div class="grid grid-cols-2 gap-4">
+                    <button id="add-money-btn" class="w-full flex items-center justify-center text-white font-bold py-3 px-4 rounded-lg bg-slate-700 hover:bg-slate-700 transition-colors"><i class="fas fa-plus-circle mr-2 text-green-400"></i>Add Money</button>
+                    <button id="withdraw-money-btn" class="w-full flex items-center justify-center text-white font-bold py-3 px-4 rounded-lg bg-slate-700 hover:bg-slate-700 transition-colors"><i class="fas fa-arrow-circle-down mr-2 text-orange-400"></i>Withdraw</button>
                 </div>
 
                 <!-- Transaction History -->
@@ -367,29 +377,50 @@
             </div>
 
             <!-- Support View -->
-            <div id="support-view" class="hidden p-4">
-                <div class="bg-slate-800/50 border border-slate-700 rounded-xl shadow-lg p-6">
+                        <div id="support-view" class="hidden p-4">
+                <div class="bg-slate-800 border border-slate-700 rounded-xl shadow-lg p-6">
                     <div class="flex items-center justify-between mb-4">
                         <h2 class="text-xl font-bold text-white">Contact Support</h2>
                         <button class="back-to-home-btn text-slate-400 hover:text-white"><i class="fas fa-times"></i></button>
                     </div>
-                    <form id="support-form">
+                    <div class="text-center py-8">
+                        <p class="text-slate-400 text-sm mb-4">For any issues or problems, please contact us directly on WhatsApp.</p>
+                        <a href="https://wa.me/9779821693287" target="_blank" class="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-full text-white bg-green-600 hover:bg-green-700">
+                            <i class="fab fa-whatsapp fa-lg mr-3"></i>
+                            Contact on WhatsApp
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Change Password View -->
+            <div id="change-password-view" class="hidden p-4">
+                <div class="bg-slate-800 border border-slate-700 rounded-xl shadow-lg p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-xl font-bold text-white">Change Password</h2>
+                        <button class="back-to-home-btn text-slate-400 hover:text-white"><i class="fas fa-times"></i></button>
+                    </div>
+                    <form id="change-password-form">
                         <div class="mb-4">
-                            <label for="support-subject" class="block text-sm font-medium text-slate-300 mb-1">Subject</label>
-                            <input type="text" id="support-subject" required class="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 bg-slate-700 border-slate-600 text-white focus:ring-teal-500" placeholder="e.g., Issue with my wallet">
+                            <label for="current-password" class="block text-sm font-medium text-slate-300 mb-1">Current Password</label>
+                            <input type="password" id="current-password" required class="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 bg-slate-700 border-slate-600 text-white focus:ring-teal-500" placeholder="••••••••">
                         </div>
-                        <div class="mb-6">
-                            <label for="support-message" class="block text-sm font-medium text-slate-300 mb-1">Message</label>
-                            <textarea id="support-message" rows="5" required class="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 bg-slate-700 border-slate-600 text-white focus:ring-teal-500" placeholder="Please describe your issue in detail..."></textarea>
+                        <div class="mb-4">
+                            <label for="new-password" class="block text-sm font-medium text-slate-300 mb-1">New Password</label>
+                            <input type="password" id="new-password" required class="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 bg-slate-700 border-slate-600 text-white focus:ring-teal-500" placeholder="••••••••">
                         </div>
-                        <button type="submit" class="w-full text-white font-bold py-2.5 px-4 rounded-md bg-gradient-to-r from-blue-500 to-teal-400 hover:opacity-90 transition-opacity">Submit Request</button>
+                        <div class="mb-4">
+                            <label for="confirm-new-password" class="block text-sm font-medium text-slate-300 mb-1">Confirm New Password</label>
+                            <input type="password" id="confirm-new-password" required class="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 bg-slate-700 border-slate-600 text-white focus:ring-teal-500" placeholder="••••••••">
+                        </div>
+                        <button type="submit" class="w-full text-white font-bold py-2.5 px-4 rounded-md bg-gradient-to-r from-orange-500 to-red-500 hover:opacity-90 transition-opacity">Change Password</button>
                     </form>
                 </div>
             </div>
 
             <!-- About Us View -->
-            <div id="about-us-view" class="hidden p-4">
-                <div class="bg-slate-800/50 border border-slate-700 rounded-xl shadow-lg p-6">
+                        <div id="about-us-view" class="hidden p-4">
+                <div class="bg-slate-800 border border-slate-700 rounded-xl shadow-lg p-6">
                     <div class="flex items-center justify-between mb-4">
                         <h2 class="text-xl font-bold text-white">About Us</h2>
                         <button class="back-to-home-btn text-slate-400 hover:text-white"><i class="fas fa-times"></i></button>
@@ -403,8 +434,8 @@
             </div>
 
             <!-- My Events View -->
-            <div id="my-events-view" class="hidden p-4 space-y-6">
-                <div class="bg-slate-800/50 border border-slate-700 rounded-lg p-2 flex space-x-2">
+                        <div id="my-events-view" class="hidden p-4 space-y-6">
+                <div class="bg-slate-800 border border-slate-700 rounded-lg p-2 flex space-x-2">
                     <button id="upcoming-tab" class="flex-1 text-center py-2 rounded-md text-sm font-semibold bg-slate-700 text-white">Upcoming/Live</button>
                     <button id="completed-tab" class="flex-1 text-center py-2 rounded-md text-sm font-semibold text-slate-300">Completed</button>
                 </div>
@@ -413,11 +444,12 @@
 
 
             <!-- Profile View -->
-            <div id="profile-view" class="hidden p-4">
-                <div class="bg-slate-800/50 border border-slate-700 rounded-xl shadow-lg p-2">
+                        <div id="profile-view" class="hidden p-4">
+                <div class="bg-slate-800 border border-slate-700 rounded-xl shadow-lg p-2">
                     <div class="space-y-1 p-2">
                         <a href="#" id="edit-profile-btn" class="flex items-center p-3 text-base text-slate-300 hover:bg-slate-700 rounded-lg transition-colors"><i class="fas fa-user-edit w-6 text-slate-400 mr-3 text-center"></i>Edit Profile</a>
                         <a href="#" id="wallet-btn" class="flex items-center p-3 text-base text-slate-300 hover:bg-slate-700 rounded-lg transition-colors"><i class="fas fa-wallet w-6 text-slate-400 mr-3 text-center"></i>Wallet</a>
+                        <a href="#" id="change-password-menu-btn" class="flex items-center p-3 text-base text-slate-300 hover:bg-slate-700 rounded-lg transition-colors"><i class="fas fa-key w-6 text-slate-400 mr-3 text-center"></i>Change Password</a>
                         <a href="#" id="support-btn" class="flex items-center p-3 text-base text-slate-300 hover:bg-slate-700 rounded-lg transition-colors"><i class="fas fa-question-circle w-6 text-slate-400 mr-3 text-center"></i>Support</a>
                         <a href="#" id="about-us-btn" class="flex items-center p-3 text-base text-slate-300 hover:bg-slate-700 rounded-lg transition-colors"><i class="fas fa-info-circle w-6 text-slate-400 mr-3 text-center"></i>About Us</a>
                     </div>
@@ -429,7 +461,7 @@
             </div>
 
             <!-- Fixed Bottom Navigation -->
-            <nav class="fixed bottom-0 left-0 right-0 bg-slate-900/70 backdrop-blur-sm border-t border-slate-700 max-w-md mx-auto">
+                        <nav class="fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-700 max-w-md mx-auto z-40">
                 <div class="flex justify-around">
                     <button id="nav-tournaments" class="flex-1 text-center py-3 text-teal-400 border-t-2 border-teal-400">
                         <i class="fas fa-trophy"></i>
@@ -547,7 +579,7 @@
 
                 <!-- Step 3: Confirmation -->
                 <div id="reg-step-3" class="hidden">
-                    <div id="registration-summary" class="space-y-2 text-sm text-slate-300 bg-slate-700/50 p-4 rounded-md">
+                                        <div id="registration-summary" class="space-y-2 text-sm text-slate-300 bg-slate-700 p-4 rounded-md">
                         <!-- Summary will be injected here -->
                     </div>
                 </div>

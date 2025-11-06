@@ -237,6 +237,7 @@ createTournamentForm.addEventListener('submit', (e) => {
 });
 
 
+
 function handleGameTypeChange() {
     const gameSelect = document.getElementById('t-game');
     const gameTypeSelect = document.getElementById('t-game-type');
@@ -296,13 +297,10 @@ document.getElementById('t-game').addEventListener('change', () => {
     setTimeout(handleGameTypeChange, 0); 
 });
 
-document.addEventListener('DOMContentLoaded', () => {
-    // Initialize tabs, auth, etc.
-    if (document.getElementById('t-game')) {
-        populateGameTypes(); // Initial population
-        handleGameTypeChange(); // Adjust form on initial load
-    }
-});
+if (document.getElementById('t-game')) {
+    populateGameTypes(); // Initial population
+    handleGameTypeChange(); // Adjust form on initial load
+}
 
 // --- Authentication Logic ---
 auth.onAuthStateChanged(user => {
@@ -1031,45 +1029,6 @@ function validateStage(stage) {
     return true;
 }
 
-createTournamentForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const dateTime = document.getElementById('t-datetime').value.split('T');
-    const date = dateTime[0];
-    const time = dateTime[1];
-
-    const newTournament = {
-        createdBy: currentAdmin.uid,
-        name: document.getElementById('t-name').value,
-        description: document.getElementById('t-desc').value,
-        game: document.getElementById('t-game').value,
-        gameType: document.getElementById('t-game-type').value,
-        format: document.getElementById('t-format').value,
-        slots: parseInt(document.getElementById('t-slots').value, 10),
-        date: date,
-        time: time,
-        fee: parseFloat(document.getElementById('t-fee').value),
-        prizePool: {
-            first: parseFloat(document.getElementById('t-prize-first').value),
-            second: parseFloat(document.getElementById('t-prize-second').value),
-            third: parseFloat(document.getElementById('t-prize-third').value)
-        },
-        status: document.getElementById('t-status').value,
-        roomId: document.getElementById('t-room-id').value,
-        roomPassword: document.getElementById('t-room-password').value,
-        registrations: {},
-        results: {}
-    };
-
-    const newTournamentRef = db.ref('tournaments').push();
-    newTournamentRef.set(newTournament)
-        .then(() => {
-            showToast('Tournament created successfully!', 'success');
-            createTournamentForm.reset();
-        })
-        .catch(error => {
-            showToast('Error creating tournament: ' + error.message, 'error');
-        });
-});
 
 function renderAdminSkeletonCards() {
     adminTournamentList.innerHTML = '';
