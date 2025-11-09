@@ -51,6 +51,7 @@ const profileEmailInput = document.getElementById('profile-email');
 const userUpiIdInput = document.getElementById('user-upi-id');
 const inGameNameInput = document.getElementById('in-game-name');
 const registrationModal = document.getElementById('registration-modal');
+const teamDetailsForm = document.getElementById('team-details-form');
 const registrationModalTitle = document.getElementById('registration-modal-title');
 const registrationForm = document.getElementById('registration-form');
 const teamUidInputs = document.getElementById('team-uid-inputs');
@@ -74,6 +75,7 @@ const addMoneyForm = document.getElementById('add-money-form');
 const withdrawMoneyForm = document.getElementById('withdraw-money-form');
 const cancelAddMoney = document.getElementById('cancel-add-money');
 const cancelWithdrawMoney = document.getElementById('cancel-withdraw-money');
+const downloadQrBtn = document.getElementById('download-qr-btn');
 
 const loginBtn = document.getElementById('login-btn');
 const signupBtn = document.getElementById('signup-btn');
@@ -361,6 +363,25 @@ function filterTournamentsByGame(game) {
 }
 
 // --- Tournament Logic ---
+function getTournamentStatus(tournament) {
+    if (tournament.status === 'completed' || tournament.status === 'canceled') {
+        return tournament.status;
+    }
+
+    const now = new Date();
+    const tournamentStart = new Date(`${tournament.date}T${tournament.time}`);
+
+    if (isNaN(tournamentStart.getTime())) {
+        return tournament.status; // Return original status if date is invalid
+    }
+
+    if (now >= tournamentStart) {
+        return 'ongoing';
+    }
+
+    return 'upcoming';
+}
+
 function renderSkeletonCards() {
     tournamentList.innerHTML = '';
     for (let i = 0; i < 3; i++) {
@@ -406,7 +427,10 @@ function renderTournaments(tournaments) {
     tournamentList.innerHTML = '';
     const tournamentsToShow = Object.entries(tournaments).filter(([id, t]) => {
         if (currentView === 'all') return t.status !== 'completed';
-        if (currentView === 'my') return t.registrations && t.registrations[currentUser.uid];
+        if (currentView === 'my') {
+            const registrations = t.registrations ? Object.values(t.registrations) : [];
+            return registrations.some(reg => reg.registeredBy === currentUser.uid);
+        }
         return false;
     }).sort((a, b) => new Date(a[1].date) - new Date(b[1].date));
 
@@ -421,14 +445,16 @@ function renderTournaments(tournaments) {
     }
 
     tournamentsToShow.forEach(([id, tournament], index) => {
-        const isRegistered = tournament.registrations && tournament.registrations[currentUser.uid];
+        const registrations = tournament.registrations ? Object.values(tournament.registrations) : [];
+        const isRegistered = registrations.some(reg => reg.registeredBy === currentUser.uid);
         const card = document.createElement('div');
         card.className = 'bg-slate-800/50 border border-slate-700 rounded-xl shadow-lg overflow-hidden fade-in-up cursor-pointer hover:border-teal-500 transition-all duration-300 relative';
         card.dataset.id = id;
         card.style.animationDelay = `${index * 100}ms`;
 
         let statusColor, statusText, statusIcon;
-        switch(tournament.status) {
+        const currentStatus = getTournamentStatus(tournament);
+        switch(currentStatus) {
             case 'upcoming': statusColor = 'bg-blue-500/20 text-blue-300'; statusText = 'Upcoming'; statusIcon = 'fa-calendar-alt'; break;
             case 'ongoing': statusColor = 'bg-green-500/20 text-green-300'; statusText = 'Ongoing'; statusIcon = 'fa-play-circle'; break;
             case 'completed': statusColor = 'bg-gray-500/20 text-gray-300'; statusText = 'Completed'; statusIcon = 'fa-check-circle'; break;
@@ -438,7 +464,9 @@ function renderTournaments(tournaments) {
         let registeredPlayersCount = 0;
         if (tournament.registrations) {
             Object.values(tournament.registrations).forEach(reg => {
-                if (reg.team && Array.isArray(reg.team)) {
+                if (reg.teamUids && Array.isArray(reg.teamUids)) {
+                    registeredPlayersCount += reg.teamUids.length;
+                } else if (reg.team && Array.isArray(reg.team)) {
                     registeredPlayersCount += reg.team.length;
                 } else {
                     // Fallback for older data structures or solo registrations
@@ -492,9 +520,9 @@ function renderTournaments(tournaments) {
                             <div class="text-xs text-slate-300">${prizeDisplayHtml}</div>
                             <div class="text-xs text-slate-400">Entry Fee: <span class="font-semibold text-green-400">${tournament.fee} Points</span></div>
                         </div>
-                        ${ (tournament.status === 'completed' && tournament.results && tournament.results.firstPlace) ? `<div class="text-right"><div class="text-xs text-slate-400">Winner</div><div class="text-sm font-bold text-yellow-400">${tournament.results.firstPlace}</div></div>` : (isRegistered
+                        ${ (currentStatus === 'completed' && tournament.results && tournament.results.firstPlace) ? `<div class="text-right"><div class="text-xs text-slate-400">Winner</div><div class="text-sm font-bold text-yellow-400">${tournament.results.firstPlace}</div></div>` : (isRegistered
                             ? `<button disabled class="text-white text-xs font-semibold py-1 px-3 rounded-md bg-green-500/80 cursor-not-allowed flex items-center"><i class="fas fa-check mr-1.5"></i>Registered</button>`
-                            : tournament.status === 'upcoming' 
+                            : currentStatus === 'upcoming' 
                                 ? `<button data-id="${id}" class="register-btn text-white text-xs font-bold py-1 px-3 rounded-md bg-blue-600 hover:bg-blue-500 transition-colors">Join</button>`
                                 : `<button disabled class="text-slate-400 text-xs font-semibold py-1 px-3 rounded-md bg-slate-700/50 cursor-not-allowed">Closed</button>`
                         )}
@@ -582,14 +610,15 @@ document.getElementById('reg-next-btn').addEventListener('click', () => {
     }
     if (currentRegStep === 2) {
         const teamUids = [];
-        const teamSize = getTeamSize(currentTournament.format);
+        const teamSize = parseInt(currentTournament.format.charAt(0)) || 1;
         for (let i = 1; i <= teamSize; i++) {
-            const input = document.getElementById(`team-uid-${i}`);
-            if (!input.value.trim()) {
-                showToast(`Please enter the in-game name for Player ${i}.`, 'error');
+            const ignInput = document.getElementById(`team-uid-${i}`);
+            if (ignInput && ignInput.value) {
+                teamUids.push(ignInput.value);
+            } else {
+                showToast(`Please enter Player ${i}'s In-Game Name.`, 'error');
                 return;
             }
-            teamUids.push(input.value.trim());
         }
         generateRegistrationSummary(teamUids);
     }
@@ -619,24 +648,20 @@ function generateRegistrationSummary(teamUids) {
     summaryContainer.innerHTML = summaryHtml;
 }
 
+
 async function openRegistrationModal(tournamentId) {
     const tournamentRef = db.ref(`tournaments/${tournamentId}`);
     const tournamentSnapshot = await tournamentRef.once('value');
     const tournament = tournamentSnapshot.val();
     currentTournament = { ...tournament, id: tournamentId }; // Set the global tournament object
     const format = tournament.format.toLowerCase();
-    let teamSize = 1;
+    const teamSize = parseInt(format.charAt(0)) || 1;
     const teamNameInputContainer = document.getElementById('team-name-input-container');
-    if (format === 'duo' || format === 'squad') {
-        teamSize = format === 'duo' ? 2 : 4;
-        teamNameInputContainer.classList.remove('hidden');
-    } else {
-        teamNameInputContainer.classList.add('hidden');
-    }
+    teamNameInputContainer.classList.toggle('hidden', teamSize <= 1);
 
     registrationModalTitle.textContent = `Register for ${tournament.name}`;
     document.getElementById('registration-fee').textContent = `Entry Fee: ${tournament.fee} Points`;
-    teamUidInputs.innerHTML = '';
+        teamUidInputs.innerHTML = '';
 
     for (let i = 1; i <= teamSize; i++) {
         const isFirstPlayer = i === 1;
@@ -789,15 +814,17 @@ function showTournamentDetail(tournament) {
 
     const isRegistered = tournament.registrations && tournament.registrations[currentUser.uid];
 
+    const currentStatus = getTournamentStatus(tournament);
+
     if (isRegistered) {
         registerBtn.textContent = 'Already Registered';
         registerBtn.disabled = true;
         registerBtn.className = 'w-full bg-gradient-to-r from-green-500 to-teal-500 opacity-70 cursor-not-allowed text-white font-bold py-2 px-4 rounded-md';
-    } else if (tournament.status === 'upcoming') {
+    } else if (currentStatus === 'upcoming') {
         registerBtn.textContent = 'Register Now';
         registerBtn.disabled = false;
         registerBtn.className = 'w-full bg-gradient-to-r from-blue-600 to-teal-500 hover:opacity-90 text-white font-bold py-2 px-4 rounded-md';
-    } else if (tournament.status === 'ongoing') {
+    } else if (currentStatus === 'ongoing') {
         registerBtn.textContent = 'Tournament in Progress';
         registerBtn.disabled = true;
         registerBtn.className = 'w-full bg-slate-600 text-slate-400 font-bold py-2 px-4 rounded-md cursor-not-allowed';
@@ -917,6 +944,7 @@ function setActiveView(view, activeBtn) {
     const isTournamentView = view === 'all';
     imageSlider.classList.toggle('hidden', !isTournamentView);
     categoryFilters.classList.toggle('hidden', !isTournamentView);
+    fabCreateTournamentBtn.classList.toggle('hidden', !isTournamentView);
 
     if (view === 'leaderboard') {
         showView(leaderboardView);
@@ -1269,6 +1297,21 @@ supportBtn.addEventListener('click', (e) => {
 });
 
 const aboutUsBtn = document.getElementById('about-us-btn');
+const fabCreateTournamentBtn = document.getElementById('fab-create-tournament');
+const createTournamentModal = document.getElementById('create-tournament-modal');
+const cancelCreateTournamentBtn = document.getElementById('cancel-create-tournament');
+const createTournamentForm = document.getElementById('create-tournament-form');
+let currentCreateStep = 1;
+const totalCreateSteps = 4;
+const createNextBtn = document.getElementById('create-next-btn');
+const createPrevBtn = document.getElementById('create-prev-btn');
+const createSubmitBtn = document.getElementById('create-submit-btn');
+const gameDropdown = document.getElementById('game');
+const gameTypeDropdown = document.getElementById('game-type');
+const tournamentFeeInput = document.getElementById('tournament-fee');
+const teamFormationDropdown = document.getElementById('team-formation');
+const calculatedPrizePoolDisplay = document.getElementById('calculated-prize-pool');
+const creatorUidInputs = document.getElementById('creator-uid-inputs');
 changePasswordMenuBtn.addEventListener('click', (e) => {
     e.preventDefault();
     showView(changePasswordView);
@@ -1277,6 +1320,204 @@ changePasswordMenuBtn.addEventListener('click', (e) => {
 aboutUsBtn.addEventListener('click', (e) => {
     e.preventDefault();
     showView(aboutUsView);
+});
+
+fabCreateTournamentBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    createTournamentModal.classList.remove('hidden');
+});
+
+cancelCreateTournamentBtn.addEventListener('click', () => {
+    createTournamentModal.classList.add('hidden');
+});
+
+gameDropdown.addEventListener('change', (e) => {
+    const selectedGame = e.target.value;
+    gameTypeDropdown.innerHTML = ''; // Clear existing options
+
+    if (selectedGame === 'PUBG') {
+        const option = new Option('TDM', 'TDM');
+        gameTypeDropdown.add(option);
+    } else if (selectedGame === 'Free Fire') {
+        const option1 = new Option('Clash Squad', 'Clash Squad');
+        const option2 = new Option('Lonewolf', 'Lonewolf');
+        gameTypeDropdown.add(option1);
+        gameTypeDropdown.add(option2);
+    }
+});
+
+function goToCreateStep(step) {
+    currentCreateStep = step;
+    for (let i = 1; i <= totalCreateSteps; i++) {
+        document.getElementById(`create-step-${i}`).classList.toggle('hidden', i !== step);
+        document.getElementById(`create-step-${i}-indicator`).classList.toggle('bg-blue-600', i === step);
+        document.getElementById(`create-step-${i}-indicator`).classList.toggle('text-white', i === step);
+        document.getElementById(`create-step-${i}-indicator`).classList.toggle('bg-slate-700', i !== step);
+        document.getElementById(`create-step-${i}-indicator`).classList.toggle('text-slate-400', i !== step);
+    }
+    createPrevBtn.classList.toggle('hidden', step === 1);
+    createNextBtn.classList.toggle('hidden', step === totalCreateSteps);
+    createSubmitBtn.classList.toggle('hidden', step !== totalCreateSteps);
+}
+
+function renderCreatorUidInputs() {
+    creatorUidInputs.innerHTML = '';
+    const teamFormation = teamFormationDropdown.value;
+    const numPlayers = parseInt(teamFormation.charAt(0));
+
+    for (let i = 1; i <= numPlayers; i++) {
+        const playerInput = `
+            <div class="mb-4">
+                <label for="creator-player-${i}-uid" class="block text-sm font-medium text-slate-300">Player ${i} UID</label>
+                <input type="text" id="creator-player-${i}-uid" required class="mt-1 w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 bg-slate-700 border-slate-600 text-white focus:ring-teal-500" placeholder="Enter Player ${i} UID">
+            </div>
+        `;
+        creatorUidInputs.insertAdjacentHTML('beforeend', playerInput);
+    }
+}
+
+function updateCalculatedPrizePool() {
+    const fee = parseFloat(tournamentFeeInput.value) || 0;
+    const teamFormation = teamFormationDropdown.value;
+    const numPlayers = parseInt(teamFormation.charAt(0));
+    const prizePool = fee * 2 * 0.9;
+    calculatedPrizePoolDisplay.textContent = `${prizePool.toFixed(2)} Points`;
+}
+
+tournamentFeeInput.addEventListener('input', updateCalculatedPrizePool);
+teamFormationDropdown.addEventListener('change', updateCalculatedPrizePool);
+
+createNextBtn.addEventListener('click', () => {
+    if (currentCreateStep === 1) {
+        if (!document.getElementById('tournament-name').value || !document.getElementById('game').value || !document.getElementById('game-type').value) {
+            showToast('Please fill out all fields in this step.', 'error');
+            return;
+        }
+    } else if (currentCreateStep === 2) {
+        if (!document.getElementById('team-formation').value || !document.getElementById('tournament-date').value || !document.getElementById('tournament-time').value) {
+            showToast('Please fill out all fields in this step.', 'error');
+            return;
+        }
+        const date = document.getElementById('tournament-date').value;
+        const time = document.getElementById('tournament-time').value;
+        const tournamentStart = new Date(`${date}T${time}`);
+        const now = new Date();
+        const thirtyMinutesFromNow = new Date(now.getTime() + 30 * 60 * 1000);
+
+        if (tournamentStart < thirtyMinutesFromNow) {
+            showToast('Tournament must be scheduled at least 30 minutes in advance.', 'error');
+            return;
+        }
+    } else if (currentCreateStep === 3) {
+        const teamFormation = teamFormationDropdown.value;
+        const numPlayers = parseInt(teamFormation.charAt(0));
+        for (let i = 1; i <= numPlayers; i++) {
+            if (!document.getElementById(`creator-player-${i}-uid`).value) {
+                showToast(`Please enter Player ${i}'s UID.`, 'error');
+                return;
+            }
+        }
+    }
+    goToCreateStep(currentCreateStep + 1);
+    if (currentCreateStep === 3) {
+        renderCreatorUidInputs();
+    }
+});
+
+createPrevBtn.addEventListener('click', () => goToCreateStep(currentCreateStep - 1));
+
+createTournamentForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const name = document.getElementById('tournament-name').value;
+    const game = document.getElementById('game').value;
+    const gameType = document.getElementById('game-type').value;
+    const date = document.getElementById('tournament-date').value;
+    const time = document.getElementById('tournament-time').value;
+    const fee = parseFloat(document.getElementById('tournament-fee').value);
+    const teamFormation = document.getElementById('team-formation').value;
+    const roomId = document.getElementById('room-id').value;
+    const roomPassword = document.getElementById('room-password').value;
+
+    const creatorTeam = [];
+    const numPlayers = parseInt(teamFormation.charAt(0));
+    for (let i = 1; i <= numPlayers; i++) {
+        creatorTeam.push(document.getElementById(`creator-player-${i}-uid`).value);
+    }
+
+        
+    const userProfile = await db.ref(`users/${currentUser.uid}`).once('value');
+    const creatorIGN = userProfile.val().inGameName;
+    const creatorWallet = userProfile.val().wallet || 0;
+
+    const totalFee = fee * parseInt(teamFormation.charAt(0));
+
+    if (creatorWallet < totalFee) {
+        showToast('Insufficient funds to create this tournament.', 'error');
+        return;
+    }
+
+    if (!name || !game || !gameType || !date || !time || isNaN(fee)) {
+        showToast('Please fill out all fields.', 'error');
+        return;
+    }
+
+    const newTournament = {
+        name: name,
+        game: game,
+        gameType: gameType,
+        date: date,
+        time: time,
+        fee: fee,
+        status: 'upcoming',
+        format: teamFormation,
+        slots: parseInt(teamFormation.charAt(0)) * 2,
+        prizePool: { first: fee * 2 * 0.9, second: 0, third: 0 },
+        createdBy: currentUser.uid,
+        createdAt: firebase.database.ServerValue.TIMESTAMP,
+        roomDetails: {
+            id: roomId,
+            password: roomPassword
+        },
+        creatorIGN: creatorIGN,
+        creatorTeam: creatorTeam,
+        totalFee: totalFee
+    };
+
+    const newBalance = creatorWallet - totalFee;
+    db.ref(`users/${currentUser.uid}/wallet`).set(newBalance);
+
+    const transaction = {
+        type: 'debit',
+        amount: totalFee,
+        description: `Tournament creation: ${name}`,
+        timestamp: firebase.database.ServerValue.TIMESTAMP
+    };
+    db.ref(`users/${currentUser.uid}/transactions`).push(transaction);
+
+    db.ref('tournaments').push(newTournament)
+        .then((newTournamentRef) => {
+            const tournamentId = newTournamentRef.key;
+            const registrationData = {
+                teamName: creatorIGN, // Using creator's IGN as team name
+                teamUids: creatorTeam,
+                registeredBy: currentUser.uid,
+                timestamp: firebase.database.ServerValue.TIMESTAMP
+            };
+            db.ref(`tournaments/${tournamentId}/registrations`).push(registrationData)
+                .then(() => {
+                    showToast('Tournament created successfully!', 'success');
+                    createTournamentForm.reset();
+                    createTournamentModal.classList.add('hidden');
+                    // Re-render tournaments to reflect the new registration
+                    db.ref('tournaments').once('value', (snapshot) => {
+                        renderTournaments(snapshot.val());
+                    });
+                });
+        })
+        .catch(error => {
+            showToast('Error creating tournament: ' + error.message, 'error');
+        });
 });
 
 
@@ -1348,12 +1589,33 @@ withdrawMoneyBtn.addEventListener('click', () => {
 cancelAddMoney.addEventListener('click', () => addMoneyModal.classList.add('hidden'));
 cancelWithdrawMoney.addEventListener('click', () => withdrawMoneyModal.classList.add('hidden'));
 
+downloadQrBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    const qrCodeImg = document.getElementById('admin-qr-code');
+    const link = document.createElement('a');
+    link.href = qrCodeImg.src;
+    link.download = 'nepus-esports-qr.png';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+});
+
 withdrawMoneyForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const amount = parseFloat(document.getElementById('withdraw-amount').value);
 
     if (!currentUser || !amount || amount <= 0) {
         showToast('Please enter a valid amount.', 'error');
+        return;
+    }
+
+    if (amount < 100) {
+        showToast('Minimum withdrawal amount is 100.', 'error');
+        return;
+    }
+
+    if (amount > 1000) {
+        showToast('Maximum withdrawal amount is 1000.', 'error');
         return;
     }
 
@@ -1477,9 +1739,14 @@ function renderMyEvents(tab) {
 
     db.ref('tournaments').once('value', snapshot => {
         const allTournaments = snapshot.val() || {};
-        const userTournaments = Object.entries(allTournaments).filter(([id, t]) => t.registrations && t.registrations[currentUser.uid]);
+        const myTournaments = Object.entries(allTournaments)
+        .filter(([id, t]) => {
+            const registrations = t.registrations ? Object.values(t.registrations) : [];
+            return registrations.some(reg => reg.registeredBy === currentUser.uid || (reg.team && reg.team.includes(currentUser.uid)));
+        })
+        .reduce((acc, [id, t]) => ({ ...acc, [id]: t }), {});
 
-        const filteredTournaments = userTournaments.filter(([id, t]) => {
+        const filteredTournaments = Object.entries(myTournaments).filter(([id, t]) => {
             if (tab === 'upcoming') return t.status !== 'completed';
             if (tab === 'completed') return t.status === 'completed';
             return false;
